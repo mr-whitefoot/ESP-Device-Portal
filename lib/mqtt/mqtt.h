@@ -75,12 +75,12 @@ void mqttStart(){
   //Create topics
   topicCreate();
 
-  mqttClient.setMqttServer( db[mqtt::serverIp].c_str(), 
-                            db[mqtt::username].c_str(), 
-                            db[mqtt::password1].c_str(),
+  mqttClient.setMqttServer( db[mqtt::serverIp].toString().c_str(), 
+                            db[mqtt::username].toString().c_str(), 
+                            db[mqtt::password1].toString().c_str(),
                             db[mqtt::serverPort] 
                            );
-  mqttClient.setMqttClientName(db[keys::deviceName].c_str());
+  mqttClient.setMqttClientName(db[keys::deviceName].toString().c_str());
   //Setup max lingth of message MQTT
   mqttClient.setMaxPacketSize(2048);
 

@@ -15,7 +15,7 @@
 //#define DEBUG_DB
 
 
-String sw_version = "3.0.9";
+String sw_version = "3.0.10";
 String release_date = "10.03.2026";
 
 GyverDBFile db(&LittleFS, "/data.db");
@@ -129,6 +129,7 @@ void setup() {
 
 void loop(){
   ArduinoOTA.handle();
+  db.tick();
   mqttClient.loop();
   mqttPublish();
   portal.tick();
