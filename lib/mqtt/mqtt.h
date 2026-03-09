@@ -1,8 +1,12 @@
+struct MQTTTopic{
+  String discovery;
+  String command;
+  String avaible;
+  String state;
+};
+
 struct MQTTData{
-  String discoveryTopic;
-  String commandTopic;
-  String avaibleTopic;
-  String stateTopic;
+  MQTTTopic topic;
 };
 
 
@@ -13,38 +17,38 @@ void topicCreate(){
   String topicPrefix = db[mqtt::topicPrefix];
   String deviceName = db[keys::deviceName];
 
-  mqttData.discoveryTopic = topicPrefix + "/switch/" + deviceName + "/config";
-  mqttData.avaibleTopic = topicPrefix + "/switch/" + deviceName + "/avaible";
-  mqttData.stateTopic = topicPrefix + "/switch/" + deviceName + "/state";
-  mqttData.commandTopic = topicPrefix + "/switch/" + deviceName + "/set";
+  mqttData.topic.discovery = topicPrefix + "/switch/" + deviceName + "/config";
+  mqttData.topic.avaible = topicPrefix + "/switch/" + deviceName + "/avaible";
+  mqttData.topic.state = topicPrefix + "/switch/" + deviceName + "/state";
+  mqttData.topic.command = topicPrefix + "/switch/" + deviceName + "/set";
 
   #ifdef DEBUG_MQTT
-    println("MQTT discovery topic: "+ mqttData.discoveryTopic );
-    println("MQTT avaible topic: "+ mqttData.avaibleTopic );
-    println("MQTT state topic: "+ mqttData.stateTopic );
-    println("MQTT command topic: "+ mqttData.commandTopic );
+    println("MQTT discovery topic: "+ mqttData.topic.discovery );
+    println("MQTT avaible topic: "+ mqttData.topic.avaible );
+    println("MQTT state topic: "+ mqttData.topic.state );
+    println("MQTT command topic: "+ mqttData.topic.command );
   #endif  
 
 }
 
 
 const String getDiscoveryTopic(){
-  return mqttData.discoveryTopic;
+  return mqttData.topic.discovery;
 }
 
 
 const String getCommandTopic(){
-  return mqttData.commandTopic;
+  return mqttData.topic.command;
 }
 
 
 const String getAvaibleTopic(){
-  return mqttData.avaibleTopic;
+  return mqttData.topic.avaible;
 }
 
 
 const String getStateTopic(){
-  return mqttData.stateTopic;
+  return mqttData.topic.state;
 }
 
 
