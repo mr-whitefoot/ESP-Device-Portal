@@ -1,3 +1,14 @@
+struct MQTTConnection {
+  String serverIp;
+  uint16_t serverPort;
+  String username;
+  String password;
+  String clientName;
+  String topicPrefix;
+  uint32_t status_delay;
+  uint32_t avaible_delay;
+};
+
 struct MQTTTopic{
   String discovery;
   String command;
@@ -6,6 +17,7 @@ struct MQTTTopic{
 };
 
 struct MQTTData{
+  MQTTConnection connection;
   MQTTTopic topic;
 };
 
@@ -13,9 +25,21 @@ struct MQTTData{
 MQTTData mqttData;
 
 
+void mqttReadConfig() {
+  mqttData.connection.serverIp = db[mqtt::serverIp].toString();
+  mqttData.connection.serverPort = db[mqtt::serverPort];
+  mqttData.connection.username = db[mqtt::username].toString();
+  mqttData.connection.password = db[mqtt::password1].toString();
+  mqttData.connection.clientName = db[keys::deviceName].toString();
+  mqttData.connection.topicPrefix = db[mqtt::topicPrefix].toString();
+  mqttData.connection.status_delay = db[mqtt::status_delay].toInt();
+  mqttData.connection.avaible_delay = db[mqtt::avaible_delay].toInt();
+}
+
+
 void topicCreate(){
-  String topicPrefix = db[mqtt::topicPrefix];
-  String deviceName = db[keys::deviceName];
+  String topicPrefix = mqttData.connection.topicPrefix;
+  String deviceName = mqttData.connection.clientName;
 
   mqttData.topic.discovery = topicPrefix + "/switch/" + deviceName + "/config";
   mqttData.topic.avaible = topicPrefix + "/switch/" + deviceName + "/avaible";
@@ -72,6 +96,8 @@ bool ToBool( String value){
 void mqttStart(){
   println("Starting MQTT"); 
 
+  mqttReadConfig();
+
   #ifdef DEBUG_MQTT
     mqttClient.enableDebuggingMessages();
   #endif  
@@ -79,20 +105,20 @@ void mqttStart(){
   //Create topics
   topicCreate();
 
-  mqttClient.setMqttServer( db[mqtt::serverIp].toString().c_str(), 
-                            db[mqtt::username].toString().c_str(), 
-                            db[mqtt::password1].toString().c_str(),
-                            db[mqtt::serverPort] 
+  mqttClient.setMqttServer( mqttData.connection.serverIp.c_str(), 
+                            mqttData.connection.username.c_str(), 
+                            mqttData.connection.password.c_str(),
+                            mqttData.connection.serverPort 
                            );
-  mqttClient.setMqttClientName(db[keys::deviceName].toString().c_str());
+  mqttClient.setMqttClientName(mqttData.connection.clientName.c_str());
   //Setup max lingth of message MQTT
   mqttClient.setMaxPacketSize(2048);
 
   // MQTT timers
   println("Starting MQTT timers");
-  MessageTimer.setTime(db[mqtt::status_delay].toInt()*1000);
+  MessageTimer.setTime(mqttData.connection.status_delay * 1000);
   MessageTimer.start();
-  ServiceMessageTimer.setTime(db[mqtt::avaible_delay].toInt()*1000);
+  ServiceMessageTimer.setTime(mqttData.connection.avaible_delay * 1000);
   ServiceMessageTimer.start();
 }
 
@@ -134,7 +160,7 @@ void SendDiscoveryMessage( ){
   DynamicJsonDocument doc(1024);
   char buffer[1024];
 
-  String device_name = db[keys::deviceName];
+  String device_name = mqttData.connection.clientName;
   uint32_t chipId = ESP.getChipId();
 
   doc["name"]         = device_name;
