@@ -26,14 +26,14 @@ MQTTData mqttData;
 
 
 void mqttReadConfig() {
-  mqttData.connection.serverIp = db[mqtt::serverIp].toString();
-  mqttData.connection.serverPort = db[mqtt::serverPort];
-  mqttData.connection.username = db[mqtt::username].toString();
-  mqttData.connection.password = db[mqtt::password1].toString();
-  mqttData.connection.clientName = db[keys::deviceName].toString();
-  mqttData.connection.topicPrefix = db[mqtt::topicPrefix].toString();
-  mqttData.connection.status_delay = db[mqtt::status_delay].toInt();
-  mqttData.connection.avaible_delay = db[mqtt::avaible_delay].toInt();
+  mqttData.connection.serverIp = data.mqttServerIp;
+  mqttData.connection.serverPort = data.mqttServerPort;
+  mqttData.connection.username = data.mqttUsername;
+  mqttData.connection.password = data.mqttPassword;
+  mqttData.connection.clientName = data.deviceName;
+  mqttData.connection.topicPrefix = data.mqttTopicPrefix;
+  mqttData.connection.status_delay = data.mqttStatusDelay;
+  mqttData.connection.avaible_delay = data.mqttAvaibleDelay;
 }
 
 

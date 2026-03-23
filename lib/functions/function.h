@@ -73,21 +73,71 @@ void timerHandle(){
 }
 
 
+void readConfig(){
+  data.deviceName = db[keys::deviceName].toString();
+  data.relayInvertMode = db[keys::relayInvertMode];
+  data.saveRelayStatus = db[keys::saveRelayStatus];
+  data.relayState = db[keys::relayState];
+  data.theme = db[keys::theme];
+  data.timezone = db[keys::timezone];
+
+  data.wifiSsid = db[wifi::ssid].toString();
+  data.wifiPass = db[wifi::password].toString();
+  data.wifiForceAP = db[wifi::forceAP];
+
+  data.mqttServerIp = db[mqtt::serverIp].toString();
+  data.mqttServerPort = db[mqtt::serverPort];
+  data.mqttUsername = db[mqtt::username].toString();
+  data.mqttPassword = db[mqtt::password1].toString();
+  data.mqttStatusDelay = db[mqtt::status_delay];
+  data.mqttAvaibleDelay = db[mqtt::avaible_delay];
+  data.mqttTopicPrefix = db[mqtt::topicPrefix].toString();
+
+  db[keys::timer].writeTo(data.timers);
+}
+
+
+void updateConfig(){
+  db[keys::deviceName] = data.deviceName;
+  db[keys::relayInvertMode] = data.relayInvertMode;
+  db[keys::saveRelayStatus] = data.saveRelayStatus;
+  db[keys::relayState] = data.relayState;
+  db[keys::theme] = data.theme;
+  db[keys::timezone] = data.timezone;
+
+  db[wifi::ssid] = data.wifiSsid;
+  db[wifi::password] = data.wifiPass;
+  db[wifi::forceAP] = data.wifiForceAP;
+
+  db[mqtt::serverIp] = data.mqttServerIp;
+  db[mqtt::serverPort] = data.mqttServerPort;
+  db[mqtt::username] = data.mqttUsername;
+  db[mqtt::password1] = data.mqttPassword;
+  db[mqtt::status_delay] = data.mqttStatusDelay;
+  db[mqtt::avaible_delay] = data.mqttAvaibleDelay;
+  db[mqtt::topicPrefix] = data.mqttTopicPrefix;
+
+  db[keys::timer] = data.timers;
+
+  db.update();
+}
+
+
 void portalStart(){
   println("Starting portal");
   portal.attachBuild(portalBuild);
   portal.disableAuth();
   portal.attach(portalAction);
   portal.OTA.attachUpdateBuild(OTAbuild);
-  portal.start(db[keys::deviceName].toString().c_str());
+  portal.start(data.deviceName.c_str());
   portal.enableOTA();
 }
 
+
 void timerRead(){
-  for(int i=0; i<TIMER_COUNT; i++){
-    //data.timers = db.get(keys::timer);
-  }
+  db[keys::timer].writeTo(data.timers);
 }
+
 
 void dbSetup(){
   Serial.println("-----------------------------");
@@ -103,17 +153,17 @@ void dbSetup(){
   db.init(keys::relayState, false);
   db.init(keys::theme, LIGHT_THEME);
   db.init(keys::timezone, 14);
- // db.init(keys::timer, data.timers);
-  //db.init(keys::timer, data.timer);
-
-
-  //data.timer = db[keys::timer];
-
 
   db.init(mqtt::topicPrefix, "homeassistant");
   db.init(mqtt::serverPort, 1883 );
   db.init(mqtt::status_delay, 10);
   db.init(mqtt::avaible_delay, 60);
+
+  db.init(wifi::ssid, "");
+  db.init(wifi::password, "");
+  db.init(wifi::forceAP, true);
+
+  readConfig();
 
   #ifdef DEBUG_DB
     db.dump(Serial);
@@ -137,14 +187,14 @@ void startup(){
   //Relay
   println("Initialize relay");
   Relay1.SetPin(RELAY_PIN);
-  Relay1.SetInvertMode(db[keys::relayInvertMode]);
+  Relay1.SetInvertMode(data.relayInvertMode);
   Relay1.ChangeStateCallback(ChangeRelayState);
-  if(db[keys::saveRelayStatus]){ 
+  if(data.saveRelayStatus){ 
       println("Restore relay state");
-      Relay1.SetState(db[keys::relayState]); };
+      Relay1.SetState(data.relayState); };
 
   // WiFi
-  wifiSetup(db[keys::deviceName], &db);
+  wifiSetup(data.deviceName, &db);
   
   // Enable OTA update
   println("Starting OTA updates");
@@ -156,11 +206,10 @@ void startup(){
   //NTP 
   println("Starting NTP");
   timeClient.setPoolServerName("pool.ntp.org");
-  timeClient.setTimeOffset(convertTimezoneToOffset(db[keys::timezone]));
+  timeClient.setTimeOffset(convertTimezoneToOffset(data.timezone));
   timeClient.begin();
 
   // Timers handler
-  //data.time = db.get([keys::timer]);
   println("Starting timers handler");
   handleTimerDelay.setTime(1000);
   handleTimerDelay.attach(timerHandle);
@@ -177,6 +226,7 @@ void factoryReset(){
   println("Factory reset");
   db.clear();
   db.update();
+  readConfig();
   restart();
 }
 
@@ -187,17 +237,17 @@ void restart(){
   SendAvailableMessage("offline");
   mqttClient.loop();
   portal.tick();
-  db.update();
+  updateConfig();
   ESP.restart();
 }
 
 
 void ChangeRelayState(){
   println("Change relay state triggered");
-  if(db[keys::saveRelayStatus]){
+  if(data.saveRelayStatus){
     println("Save relay state");
-    db[keys::relayState] = Relay1.GetState();
-    db.update();
+    data.relayState = Relay1.GetState();
+    updateConfig();
   }
   publishRelay();
 }

@@ -15,8 +15,8 @@
 //#define DEBUG_DB
 
 
-String sw_version = "3.0.10";
-String release_date = "10.03.2026";
+String sw_version = "3.0.12";
+String release_date = "23.03.2026";
 
 GyverDBFile db(&LittleFS, "/data.db");
 
@@ -69,8 +69,30 @@ enum mqtt : size_t {
 };
 
 struct Data {
+  // Device settings
+  String deviceName;
+  byte theme;
+  bool relayInvertMode;
+  bool saveRelayStatus;
+  bool relayState;
+  byte timezone;
+
+  // WiFi settings
+  String wifiSsid;
+  String wifiPass;
+  bool wifiForceAP;
+
+  // MQTT settings
+  String mqttServerIp;
+  uint16_t mqttServerPort;
+  String mqttUsername;
+  String mqttPassword;
+  uint32_t mqttStatusDelay;
+  uint32_t mqttAvaibleDelay;
+  String mqttTopicPrefix;
+
+  // Timers
   Timers timers; 
-  Timer timer; 
 };
 
 
@@ -103,6 +125,8 @@ ESPRelay Relay1;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
 
+void updateConfig();
+void readConfig();
 void publishRelay();
 void SendDiscoveryMessage();
 void SendAvailableMessage(const String &mode );
