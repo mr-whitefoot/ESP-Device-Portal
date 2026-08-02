@@ -2,51 +2,13 @@
 #include <settings.h>
 #include <timer_schedule.h>
 
-// Ключи настроек, разложенные по владельцам.
+// Параметры реле. Лежат рядом с устройством, а не в ядре: добавление нового
+// устройства не должно требовать правки общих файлов.
 //
-// Каждая группа принадлежит своему модулю: при выделении ядра и контракта
-// устройства keys::relay и keys::timer уедут к реле, остальное останется
-// в ядре. Пока лежат рядом, но уже разделены namespace'ами, чтобы переезд
-// был перемещением текста, а не разбором зависимостей.
-//
-// Имена свободные: совместимость с ранее сохранёнными настройками
-// сознательно не поддерживается, версия 3.1.0 сбрасывает их один раз.
-// Дальше имена неприкасаемы -- переименование ключа меняет хэш и равносильно
+// Имена ключей неприкасаемы -- переименование меняет хэш и равносильно
 // потере параметра.
 
 namespace keys {
-
-namespace sys {
-// Версия раскладки настроек. Нужна, чтобы следующее несовместимое изменение
-// можно было мигрировать, а не сбрасывать.
-constexpr settings::Key schema{"sys.schema"};
-}  // namespace sys
-
-namespace dev {
-constexpr settings::Key name{"dev.name"};
-constexpr settings::Key timezone{"dev.timezone"};
-}  // namespace dev
-
-namespace wifi {
-// ВНИМАНИЕ: имена обязаны совпадать с теми, что использует ESP-Relay-WiFi-lib
-// (enum wifi : size_t в wifi_func.h). Хэш считается тем же алгоритмом, что
-// у StringUtils SH, поэтому ключи сходятся, и библиотека с приложением видят
-// одни и те же ячейки. Согласованность проверяется static_assert в main.cpp.
-// После перехода на DBConnector ограничение снимется.
-constexpr settings::Key ssid{"wifiSsid"};
-constexpr settings::Key password{"wifiPassword"};
-constexpr settings::Key forceAP{"wifiForceAP"};
-}  // namespace wifi
-
-namespace mqtt {
-constexpr settings::Key host{"mqtt.host"};
-constexpr settings::Key port{"mqtt.port"};
-constexpr settings::Key username{"mqtt.username"};
-constexpr settings::Key password{"mqtt.password"};
-constexpr settings::Key topicPrefix{"mqtt.topicPrefix"};
-constexpr settings::Key statusDelay{"mqtt.statusDelay"};
-constexpr settings::Key availableDelay{"mqtt.availableDelay"};
-}  // namespace mqtt
 
 namespace relay {
 constexpr settings::Key invert{"relay.invert"};

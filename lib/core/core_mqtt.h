@@ -51,10 +51,14 @@ void topicCreate(){
   mqttData.topicName = safeName;
   const String& deviceName = mqttData.topicName;
 
-  mqttData.topic.discovery = topicPrefix + "/switch/" + deviceName + "/config";
-  mqttData.topic.avaible = topicPrefix + "/switch/" + deviceName + "/avaible";
-  mqttData.topic.state = topicPrefix + "/switch/" + deviceName + "/state";
-  mqttData.topic.command = topicPrefix + "/switch/" + deviceName + "/set";
+  // Компонент HomeAssistant задаёт устройство: у реле это switch, у датчика
+  // будет sensor. Топики строит ядро, чтобы правила именования были общими.
+  String component = String("/") + device::haComponent() + "/";
+
+  mqttData.topic.discovery = topicPrefix + component + deviceName + "/config";
+  mqttData.topic.avaible = topicPrefix + component + deviceName + "/avaible";
+  mqttData.topic.state = topicPrefix + component + deviceName + "/state";
+  mqttData.topic.command = topicPrefix + component + deviceName + "/set";
 
   #ifdef DEBUG_MQTT
     println("MQTT discovery topic: "+ mqttData.topic.discovery );
@@ -133,12 +137,12 @@ void onConnectionEstablished() {
 
   mqttClient.subscribe(getCommandTopic(), [] (const String &payload)  {
     println("MQTT received command topic");
-    Relay1.SetState( parseSwitchPayload(payload.c_str(), Relay1.GetState()) );
+    device::onCommand(payload);
   });
 }
 
 
-void publishRelay() {
+void publishState() {
   if (!mqttClient.isConnected()){
     return;
   };
@@ -146,9 +150,9 @@ void publishRelay() {
     println("MQTT publish status");
   #endif
   JsonDocument doc;
-  doc["switch"] = Relay1.GetState();
   doc["WiFiRSSI"] = WiFi.RSSI();
   doc["IPAddress"] = WiFi.localIP().toString();
+  device::fillState(doc);
 
   String payload;
   serializeJson(doc, payload);
@@ -181,17 +185,14 @@ void SendDiscoveryMessage( ){
   // и работало это лишь по совпадению: HomeAssistant приводит их к строкам
   // "True"/"False", ровно так же, как Jinja рендерит булево значение в шаблоне.
   doc["stat_t"]       = getStateTopic();
-  doc["stat_on"]      = "ON";
-  doc["stat_off"]     = "OFF";
-  doc["cmd_t"]        = getCommandTopic();
-  doc["pl_on"]        = "ON";
-  doc["pl_off"]       = "OFF";
-  doc["dev_cla"]      = "switch";
-  doc["val_tpl"]      = "{{ 'ON' if value_json.switch else 'OFF' }}";
+
+  // Всё, что зависит от вида устройства -- команды, шаблон значения, класс,
+  // единицы измерения -- добавляет само устройство.
+  device::fillDiscovery(doc);
 
   JsonObject device = doc["device"].to<JsonObject>();
   device["name"] = device_name;
-  device["model"] = "ESP_" + device_name + "_hw1.0";
+  device["model"] = String("ESP_") + ::device::model() + "_hw1.0";
   device["configuration_url"] = "http://"+WiFi.localIP().toString();
   device["manufacturer"] = "WhiteFoot company";
   device["sw_version"]   = sw_version;
@@ -225,7 +226,7 @@ void SendAvailableMessage(const String &mode = "online"){
 
 void mqttPublish() {
   if (mqttClient.isConnected() && MessageTimer.tick()) {
-    publishRelay();
+    publishState();
   }
 
   if (mqttClient.isConnected() && ServiceMessageTimer.tick()) {

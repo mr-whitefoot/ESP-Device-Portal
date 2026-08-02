@@ -11,39 +11,6 @@ String timezoneOptions(){
 }
 
 
-void createTimerUi(const int index){
-  GP.BLOCK_TAB_BEGIN("Timer");
-    GP.BOX_BEGIN(GP_EDGES);
-      GP.LABEL("Timer"); GP.SWITCH("timerEnable"+String(index), timers.timer[index].enable);
-    GP.BOX_END();
-    GP.SELECT("timerHours"+String(index),"00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23", timers.timer[index].hours);
-    GP.SELECT("timerMinutes"+String(index),"00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59",timers.timer[index].minutes);
-    GP.SELECT("timerSeconds"+String(index),"00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59",timers.timer[index].seconds);
-    GP.BOX_BEGIN(GP_EDGES);
-      GP.LABEL("Action"); GP.SELECT("timerAction"+String(index), "On,Off,Toggle", timers.timer[index].action);
-    GP.BOX_END();
-  GP.BLOCK_END();
-}
-
-
-void saveTimer(const int index){
-  bool enable = false;
-  int action = 0, hours = 0, minutes = 0, seconds = 0;
-
-  portal.copyBool("timerEnable"+String(index), enable);
-  portal.copyInt("timerAction"+String(index), action);
-  portal.copyInt("timerHours"+String(index), hours);
-  portal.copyInt("timerMinutes"+String(index), minutes);
-  portal.copyInt("timerSeconds"+String(index), seconds);
-
-  settings::setBool(keys::timer::enable[index], enable);
-  settings::setInt(keys::timer::action[index], action);
-  settings::setInt(keys::timer::hours[index], hours);
-  settings::setInt(keys::timer::minutes[index], minutes);
-  settings::setInt(keys::timer::seconds[index], seconds);
-}
-
-
 void portalBuild(){
   uint32_t timeleftAP = WiFiApTimer.timeLeft()/1000;
 
@@ -52,12 +19,22 @@ void portalBuild(){
   // GP_DARK 10267 байт плюс GP_LIGHT 9654, при запасе под OTA около 20 КБ.
   GP.THEME(GP_DARK);
 
-  // Update components
-  GP.UPDATE("signal,switch,mqttStatusLed,ipAddress,wifiAPTimer,time");
+  // Ядро обновляет свои поля, устройство добавляет свои.
+  {
+    String ids = "signal,mqttStatusLed,ipAddress,wifiAPTimer,time";
+    const char* deviceIds = device::updateIds();
+    if (deviceIds && *deviceIds) { ids += ','; ids += deviceIds; }
+    GP.UPDATE(ids);
+  }
 
+
+  // Страницы устройства идут первыми: ядро не знает, какие они.
+  if (device::buildPage(portal.uri())) {
+    GP.BUILD_END();
+    return;
 
   // Configuration page
-  if (portal.uri() == form.config) {
+  } else if (portal.uri() == form.config) {
     GP.PAGE_TITLE("Configuration");
     GP.TITLE("Configuration");
     GP.HR();
@@ -76,21 +53,6 @@ void portalBuild(){
     GP.AREA_LOG(glog, 20);
     GP.BUTTON_LINK(form.root, "Back");
 
-  //Timers
-  } else if (portal.uri() == form.timers){
-    GP.FORM_BEGIN(form.timers);
-      GP.PAGE_TITLE("Timers");
-      GP.TITLE("Timers");
-      GP.HR();
-      for(int i=0; i<TIMER_COUNT; i++){
-        createTimerUi(i);
-      }
-      GP.HR();
-      GP.SUBMIT("Save");
-    GP.FORM_END();
-
-     GP.BUTTON_LINK(form.root, "Back");
-
   //Preferences
   } else if (portal.uri() == form.preferences){
     GP.FORM_BEGIN(form.preferences);
@@ -101,13 +63,9 @@ void portalBuild(){
         GP.TEXT("deviceName", "Device name", settings::getStringValue(keys::dev::name)); GP.BREAK();
       GP.BLOCK_END();
 
+      device::buildSettingsUi();
+
       GP.BLOCK_TAB_BEGIN("Settings");
-        GP.BOX_BEGIN(GP_EDGES);
-          GP.LABEL("Relay invert mode"); GP.SWITCH("relayInvertMode", settings::getBool(keys::relay::invert));
-        GP.BOX_END();
-        GP.BOX_BEGIN(GP_EDGES);
-          GP.LABEL("Save relay status"); GP.SWITCH("relaySaveStatus", settings::getBool(keys::relay::saveState));
-        GP.BOX_END();
         GP.BOX_BEGIN(GP_EDGES);
           GP.LABEL("Timezone"); 
           GP.SELECT("timezone", timezoneOptions(), settings::getInt(keys::dev::timezone));
@@ -226,11 +184,7 @@ void portalBuild(){
   } else {
     GP.PAGE_TITLE("Portal");
     GP.FORM_BEGIN(form.root);
-       GP.BLOCK_TAB_BEGIN("Control");
-        GP.BOX_BEGIN(GP_EDGES);
-          GP.LABEL( settings::getStringValue(keys::dev::name) ); GP.SWITCH("switch", Relay1.GetState());
-        GP.BOX_END();
-      GP.BLOCK_END();
+      device::buildHomeUi();
 
       GP.BLOCK_TAB_BEGIN("WiFi");
         if (WiFi.status() == WL_CONNECTED){
@@ -277,7 +231,7 @@ void portalBuild(){
         };
       GP.BLOCK_END();
       GP.HR();
-      GP.BUTTON_LINK(form.timers, "Timers");
+      device::buildHomeLinks();
       GP.BUTTON_LINK(form.config, "Configuration");
       GP.BUTTON_LINK(form.log, "Log");
     GP.FORM_END();
@@ -305,11 +259,7 @@ void portalCheckForm(){
     } else if(portal.form(form.preferences)){
       settings::setString(keys::dev::name, portal.getString("deviceName").c_str());
 
-      bool invert = portal.getCheck("relayInvertMode");
-      settings::setBool(keys::relay::invert, invert);
-      Relay1.SetInvertMode(invert);
-
-      settings::setBool(keys::relay::saveState, portal.getCheck("relaySaveStatus"));
+      device::readSettingsForm();
 
       int32_t timezone = portal.getInt("timezone");
       settings::setInt(keys::dev::timezone, timezone);
@@ -329,11 +279,8 @@ void portalCheckForm(){
 
       restart();
 
-      //Timers
-    } else if(portal.form(form.timers)){
-        for(int i=0; i < TIMER_COUNT; i++){ saveTimer(i); };
-        settings::commit();
-        timersLoad();   // обновить кэш расписания
+    } else {
+      device::handleForm();
     }
   }
 
@@ -343,7 +290,6 @@ void portalCheckForm(){
     String wifiStrength = String(strength)+"%";
     portal.updateString("signal", wifiStrength);
 
-    portal.updateInt("switch", Relay1.GetState());
     portal.updateInt("mqttStatusLed",mqttClient.isConnected());
     String ipAdress = WiFi.localIP().toString();
     portal.updateString("ipAddress", ipAdress);
@@ -354,6 +300,7 @@ void portalCheckForm(){
     String time = timeClient.getFormattedTime();
     portal.updateString("time", time);
 
+    device::updateUi();
     portal.updateLog(glog);
   }
 }
@@ -365,12 +312,7 @@ void portalAction(){
   if (portal.click()){
     Serial.println("Portal click");
 
-    // Переключатели инверсии и сохранения состояния разбираются в обработчике
-    // формы Preferences по кнопке Save, как и остальные её поля. Здесь были
-    // отдельные обработчики кликов, причём один из них с опечаткой в имени
-    // ("relayInverMode") и потому мёртвый, а второй сохранял настройку в обход
-    // кнопки Save -- поведение расходилось между двумя переключателями.
-    if (portal.click("switch")){ Relay1.SetState( portal.getCheck("switch") ); }
+    device::handleClick();
     if (portal.click("rebootButton")){ restart(); }
   }
 }
