@@ -285,7 +285,8 @@ void portalCheckForm(){
     if (portal.form(form.WiFiConfig)) {
       data.wifiSsid  = portal.getString("ssid");
       data.wifiPass = portal.getString("pass");
-      data.wifiForceAP = false;
+      // Пишем прямо в базу, минуя Data: флагом владеет wifi-библиотека.
+      db[wifi::forceAP] = false;
       updateConfig();
       restart();
 

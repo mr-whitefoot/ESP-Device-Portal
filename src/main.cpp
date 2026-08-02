@@ -80,9 +80,11 @@ struct Data {
   byte timezone;
 
   // WiFi settings
+  // Флага forceAP здесь намеренно нет: им владеет wifi-библиотека, которая
+  // пишет его в базу напрямую. Копия в Data успевала устареть, и обратная
+  // запись из updateConfig() затирала решение библиотеки.
   String wifiSsid;
   String wifiPass;
-  bool wifiForceAP;
 
   // MQTT settings
   String mqttServerIp;

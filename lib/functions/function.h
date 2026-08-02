@@ -40,7 +40,6 @@ void readConfig(){
 
   data.wifiSsid = db[wifi::ssid].toString();
   data.wifiPass = db[wifi::password].toString();
-  data.wifiForceAP = db[wifi::forceAP];
 
   data.mqttServerIp = db[mqtt::serverIp].toString();
   data.mqttServerPort = db[mqtt::serverPort];
@@ -64,7 +63,6 @@ void updateConfig(){
 
   db[wifi::ssid] = data.wifiSsid;
   db[wifi::password] = data.wifiPass;
-  db[wifi::forceAP] = data.wifiForceAP;
 
   db[mqtt::serverIp] = data.mqttServerIp;
   db[mqtt::serverPort] = data.mqttServerPort;
@@ -116,9 +114,10 @@ void dbSetup(){
   db.init(mqtt::status_delay, 10);
   db.init(mqtt::avaible_delay, 60);
 
+  // forceAP инициализирует сама wifi-библиотека в wifiSetup(): ключ должен
+  // иметь ровно одного владельца.
   db.init(wifi::ssid, "");
   db.init(wifi::password, "");
-  db.init(wifi::forceAP, true);
 
   readConfig();
 
