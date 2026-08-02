@@ -1,9 +1,14 @@
 import os
 import sys
+from datetime import date
 
 Import("env")
 
 env.Replace(PROGNAME="ESP_Relay_v%s" % env.GetProjectOption("release_version"))
+
+# Дата сборки. Раньше лежала литералом в main.cpp и правилась руками, то есть
+# показывала в портале что угодно, кроме реальной даты прошивки.
+env.Append(CPPDEFINES=[("RELEASE_DATE", date.today().strftime("%d.%m.%Y"))])
 
 
 # Предел размера прошивки по возможности обновления по воздуху.

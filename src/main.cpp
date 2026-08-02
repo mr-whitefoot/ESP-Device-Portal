@@ -19,14 +19,15 @@
 //#define DEBUG_DB
 
 
-// Версия приходит из platformio.ini через -DVERSION, чтобы не разъезжаться
-// с release_version и с именем bin-файла. Макрос подставляется без кавычек,
-// поэтому его нужно превратить в строку.
+// Версия приходит из platformio.ini через -DVERSION, дата сборки -- из
+// extra_script.py через -DRELEASE_DATE. Так они не разъезжаются ни с
+// release_version, ни с именем bin-файла, ни с реальностью.
+// Макросы подставляются без кавычек, поэтому их нужно превратить в строку.
 #define _STRINGIFY(x) #x
 #define STRINGIFY(x) _STRINGIFY(x)
 
 String sw_version = STRINGIFY(VERSION);
-String release_date = "23.03.2026";
+String release_date = STRINGIFY(RELEASE_DATE);
 
 GyverDBFile db(&LittleFS, "/data.db");
 
