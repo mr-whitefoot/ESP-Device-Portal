@@ -48,7 +48,6 @@ void readConfig(){
   data.relayInvertMode = db[keys::relayInvertMode];
   data.saveRelayStatus = db[keys::saveRelayStatus];
   data.relayState = db[keys::relayState];
-  data.theme = db[keys::theme];
   data.timezone = db[keys::timezone];
 
   data.wifiSsid = db[wifi::ssid].toString();
@@ -71,7 +70,6 @@ void updateConfig(){
   db[keys::relayInvertMode] = data.relayInvertMode;
   db[keys::saveRelayStatus] = data.saveRelayStatus;
   db[keys::relayState] = data.relayState;
-  db[keys::theme] = data.theme;
   db[keys::timezone] = data.timezone;
 
   db[wifi::ssid] = data.wifiSsid;
@@ -119,7 +117,6 @@ void dbSetup(){
   db.init(keys::relayInvertMode, false);
   db.init(keys::saveRelayStatus, false);
   db.init(keys::relayState, false);
-  db.init(keys::theme, LIGHT_THEME);
   db.init(keys::timezone, TIMEZONE_UTC);
 
   db.init(mqtt::topicPrefix, "homeassistant");

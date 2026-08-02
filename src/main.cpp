@@ -34,8 +34,6 @@ GyverDBFile db(&LittleFS, "/data.db");
 #include <wifi_func.h>
 
 
-#define LIGHT_THEME 0
-#define DARK_THEME 1
 #define RELAY_PIN 0
 
 
@@ -47,7 +45,6 @@ enum keys : size_t {
   relayState      = SH("relayState"),
   timezone        = SH("timezone"),
 
-  theme = SH("theme"),
   timer = SH("timer"),
 };
 
@@ -67,7 +64,6 @@ enum mqtt : size_t {
 struct Data {
   // Device settings
   String deviceName;
-  byte theme;
   bool relayInvertMode;
   bool saveRelayStatus;
   bool relayState;

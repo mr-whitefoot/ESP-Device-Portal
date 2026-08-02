@@ -39,8 +39,9 @@ void portalBuild(){
   uint32_t timeleftAP = WiFiApTimer.timeLeft()/1000;
 
   GP.BUILD_BEGIN();
-  if (data.theme == LIGHT_THEME ) GP.THEME(GP_LIGHT);
-  else GP.THEME(GP_DARK);
+  // Тема одна. Выбор из двух заставлял линкер тянуть обе таблицы стилей:
+  // GP_DARK 10267 байт плюс GP_LIGHT 9654, при запасе под OTA около 20 КБ.
+  GP.THEME(GP_DARK);
 
   // Update components
   GP.UPDATE("signal,switch,mqttStatusLed,ipAddress,wifiAPTimer,time");
@@ -92,9 +93,6 @@ void portalBuild(){
       GP.BLOCK_END();
 
       GP.BLOCK_TAB_BEGIN("Settings");
-        GP.BOX_BEGIN(GP_EDGES);
-          GP.LABEL("Theme");   GP.SELECT("theme", "Light,Dark", data.theme);
-        GP.BOX_END();
         GP.BOX_BEGIN(GP_EDGES);
           GP.LABEL("Relay invert mode"); GP.SWITCH("relayInvertMode", data.relayInvertMode);
         GP.BOX_END();
@@ -301,7 +299,6 @@ void portalCheckForm(){
       data.deviceName = portal.getString("deviceName");
       data.relayInvertMode = portal.getCheck("relayInvertMode");
       Relay1.SetInvertMode( data.relayInvertMode );
-      data.theme = portal.getInt("theme");
       data.timezone = portal.getInt("timezone");
       timeClient.setTimeOffset(tzOffsetSeconds(data.timezone));
       
@@ -373,11 +370,7 @@ void portalAction(){
 //Custom OTA page
 void OTAbuild(bool UpdateEnd, const String& UpdateError) {
   GP.BUILD_BEGIN(400);
-    #ifndef GP_OTA_LIGHT
-      GP.THEME(GP_DARK);
-    #else
-      GP.THEME(GP_LIGHT);
-    #endif
+    GP.THEME(GP_DARK);
     GP.PAGE_TITLE(F("Firmware upgrade"));
     if (!UpdateEnd) {
       GP.BLOCK_TAB_BEGIN(F("Firmware upgrade"));
