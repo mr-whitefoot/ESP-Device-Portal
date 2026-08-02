@@ -18,6 +18,7 @@ void portalStart(){
   portal.OTA.attachUpdateBuild(OTAbuild);
   portal.start(settings::getStringValue(keys::dev::name).c_str());
   portal.enableOTA();
+  corewifi::portalStarted();
 }
 
 
@@ -69,8 +70,6 @@ void settingsSetup(){
 
   device::defineSettings();
 
-  // forceAP инициализирует сама wifi-библиотека в wifiSetup(): ключ должен
-  // иметь ровно одного владельца.
   settings::defineString(keys::wifi::ssid, "");
   settings::defineString(keys::wifi::password, "");
 
@@ -98,9 +97,7 @@ void startup(){
   device::begin();
 
   // WiFi
-  // Библиотека работает с базой напрямую, поэтому получает экземпляр из
-  // слоя. Уйдёт вместе с переходом на DBConnector.
-  wifiSetup(settings::getStringValue(keys::dev::name), &settings::detail::db());
+  corewifi::begin(settings::getStringValue(keys::dev::name));
 
   // Enable OTA update
   println("Starting OTA updates");

@@ -25,14 +25,11 @@ constexpr settings::Key timezone{"dev.timezone"};
 }  // namespace dev
 
 namespace wifi {
-// ВНИМАНИЕ: имена обязаны совпадать с теми, что использует ESP-Relay-WiFi-lib
-// (enum wifi : size_t в wifi_func.h). Хэш считается тем же алгоритмом, что
-// у StringUtils SH, поэтому ключи сходятся, и библиотека с приложением видят
-// одни и те же ячейки. Согласованность проверяется static_assert в main.cpp.
-// После перехода на DBConnector ограничение снимется.
 constexpr settings::Key ssid{"wifiSsid"};
 constexpr settings::Key password{"wifiPassword"};
-constexpr settings::Key forceAP{"wifiForceAP"};
+// Ключа forceAP больше нет: он существовал только чтобы протащить намерение
+// "подняться точкой доступа" через перезагрузку. Автомат держит состояние
+// сам, перезагрузок в цикле подключения не осталось.
 }  // namespace wifi
 
 namespace mqtt {

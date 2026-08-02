@@ -12,7 +12,7 @@ String timezoneOptions(){
 
 
 void portalBuild(){
-  uint32_t timeleftAP = WiFiApTimer.timeLeft()/1000;
+  uint32_t retryLeft = corewifi::retryLeftSeconds();
 
   GP.BUILD_BEGIN();
   // Тема одна. Выбор из двух заставлял линкер тянуть обе таблицы стилей:
@@ -223,10 +223,10 @@ void portalBuild(){
           GP.LABEL("Release date");
           GP.LABEL(release_date);
         GP.BOX_END();
-        if (WiFiApTimer.active()){
+        if (retryLeft){
           GP.BOX_BEGIN(GP_EDGES);
-            GP.LABEL("Restart in");
-            GP.LABEL(String(timeleftAP),"wifiAPTimer");
+            GP.LABEL("Retry in");
+            GP.LABEL(String(retryLeft),"wifiAPTimer");
           GP.BOX_END();
         };
       GP.BLOCK_END();
@@ -246,8 +246,10 @@ void portalCheckForm(){
     if (portal.form(form.WiFiConfig)) {
       settings::setString(keys::wifi::ssid, portal.getString("ssid").c_str());
       settings::setString(keys::wifi::password, portal.getString("pass").c_str());
-      settings::setBool(keys::wifi::forceAP, false);
-      restart();
+      settings::commit();
+      // Без перезагрузки: автомат сам попробует новые креды, а если они
+      // не подойдут -- вернёт точку доступа.
+      corewifi::credentialsChanged();
 
     // Factory reset
     } else if(portal.form(form.factoryReset)){
@@ -294,8 +296,7 @@ void portalCheckForm(){
     String ipAdress = WiFi.localIP().toString();
     portal.updateString("ipAddress", ipAdress);
 
-    uint32_t timeleftAP = WiFiApTimer.timeLeft()/1000;
-    portal.updateInt("wifiAPTimer", timeleftAP);
+    portal.updateInt("wifiAPTimer", corewifi::retryLeftSeconds());
 
     String time = timeClient.getFormattedTime();
     portal.updateString("time", time);

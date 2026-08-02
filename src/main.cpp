@@ -29,18 +29,6 @@ String sw_version = STRINGIFY(VERSION);
 String release_date = STRINGIFY(RELEASE_DATE);
 
 
-#include <wifi_func.h>
-
-// Библиотека WiFi адресует базу собственными ключами через SH(). Слой
-// настроек считает хэш тем же алгоритмом, поэтому имена сходятся байт в байт
-// и обе стороны видят одни и те же ячейки. Проверяем это на сборке, а не
-// надеемся: разъехавшийся хэш означал бы, что портал правит одни настройки,
-// а подключается библиотека по другим.
-static_assert(keys::wifi::ssid.id == wifi::ssid, "ключ SSID разошёлся с wifi-библиотекой");
-static_assert(keys::wifi::password.id == wifi::password, "ключ пароля разошёлся с wifi-библиотекой");
-static_assert(keys::wifi::forceAP.id == wifi::forceAP, "ключ forceAP разошёлся с wifi-библиотекой");
-
-
 // Зеркала настроек в оперативке (прежняя struct Data) больше нет: каждый
 // параметр читается из слоя там, где нужен. Именно зеркало было точкой
 // связывания -- добавление устройства требовало правки общей структуры,
@@ -83,6 +71,7 @@ void print(const String& text);
 
 // Ядро сначала, устройство после: ядро зовёт device::*, объявленные в
 // контракте выше, а определения приходят с реализацией устройства.
+#include <core_wifi.h>
 #include <core_portal.h>
 #include <core_boot.h>
 #include <core_mqtt.h>
@@ -102,7 +91,7 @@ void loop(){
   mqttClient.loop();
   mqttPublish();
   portal.tick();
-  wifiLoop();
+  corewifi::tick();
   timeClient.update();
   device::tick();
 }
