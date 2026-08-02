@@ -9,6 +9,10 @@
 #include <NTPClient.h>
 #include <GyverDBFile.h>
 #include <LittleFS.h>
+// Слой настроек пока только подключён, чтобы сборка прошивки проверяла
+// GyverDB-бэкенд: тестами он не покрывается, так как требует LittleFS.
+// Переезд кода на него -- следующим шагом.
+#include <settings.h>
 #include <timezone_table.h>
 #include <mqtt_topics.h>
 #include <mqtt_payload.h>
