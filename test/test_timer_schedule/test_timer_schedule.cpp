@@ -131,12 +131,6 @@ void test_garbage_time_is_ignored(void) {
   TEST_ASSERT_EQUAL_UINT32(0, scheduler.due(timers, 999999));
 }
 
-// Блоб уходит в базу как есть, раскладка обязана остаться прежней.
-void test_struct_layout_is_stable(void) {
-  TEST_ASSERT_EQUAL(5, sizeof(Timer));
-  TEST_ASSERT_EQUAL(25, sizeof(Timers));
-}
-
 void test_second_of_day_conversion(void) {
   Timer t = {true, TIMER_ACTION_ON, 23, 59, 59};
   TEST_ASSERT_EQUAL_UINT32(86399, timerSecondOfDay(t));
@@ -161,7 +155,6 @@ int main(int argc, char** argv) {
   RUN_TEST(test_backward_clock_jump_does_not_fire);
   RUN_TEST(test_resync_skips_one_interval);
   RUN_TEST(test_garbage_time_is_ignored);
-  RUN_TEST(test_struct_layout_is_stable);
   RUN_TEST(test_second_of_day_conversion);
   return UNITY_END();
 }

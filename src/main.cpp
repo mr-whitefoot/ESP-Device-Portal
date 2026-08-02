@@ -7,16 +7,13 @@
 #include <TimeLib.h>
 #include <WiFiUdp.h>
 #include <NTPClient.h>
-#include <GyverDBFile.h>
-#include <LittleFS.h>
-// Слой настроек пока только подключён, чтобы сборка прошивки проверяла
-// GyverDB-бэкенд: тестами он не покрывается, так как требует LittleFS.
-// Переезд кода на него -- следующим шагом.
 #include <settings.h>
+#include <settings_string.h>
 #include <timezone_table.h>
 #include <mqtt_topics.h>
 #include <mqtt_payload.h>
 #include <timer_schedule.h>
+#include <keys.h>
 
 
 //#define DEBUG_MQTT
@@ -33,70 +30,32 @@
 String sw_version = STRINGIFY(VERSION);
 String release_date = STRINGIFY(RELEASE_DATE);
 
-GyverDBFile db(&LittleFS, "/data.db");
-
 
 #include <wifi_func.h>
+
+// Библиотека WiFi адресует базу собственными ключами через SH(). Слой
+// настроек считает хэш тем же алгоритмом, поэтому имена сходятся байт в байт
+// и обе стороны видят одни и те же ячейки. Проверяем это на сборке, а не
+// надеемся: разъехавшийся хэш означал бы, что портал правит одни настройки,
+// а подключается библиотека по другим.
+static_assert(keys::wifi::ssid.id == wifi::ssid, "ключ SSID разошёлся с wifi-библиотекой");
+static_assert(keys::wifi::password.id == wifi::password, "ключ пароля разошёлся с wifi-библиотекой");
+static_assert(keys::wifi::forceAP.id == wifi::forceAP, "ключ forceAP разошёлся с wifi-библиотекой");
 
 
 #define RELAY_PIN 0
 
 
-enum keys : size_t {
-  deviceName = SH("deviceName"),
-  
-  relayInvertMode = SH("relayInvertMode"),
-  saveRelayStatus = SH("saveRelayStatus"),
-  relayState      = SH("relayState"),
-  timezone        = SH("timezone"),
-
-  timer = SH("timer"),
-};
-
-enum mqtt : size_t {
-  serverIp = SH("mqttServerIp"),
-  serverPort = SH("mqttServerPort"),
-  
-  username = SH("mqttUsername"),
-  password1 = SH("mqttPassword"),
-
-  status_delay = SH("status_delay"),
-  avaible_delay = SH("avaible_delay"),
-
-  topicPrefix = SH("topicPrefix"),
-};
-
-struct Data {
-  // Device settings
-  String deviceName;
-  bool relayInvertMode;
-  bool saveRelayStatus;
-  bool relayState;
-  byte timezone;
-
-  // WiFi settings
-  // Флага forceAP здесь намеренно нет: им владеет wifi-библиотека, которая
-  // пишет его в базу напрямую. Копия в Data успевала устареть, и обратная
-  // запись из updateConfig() затирала решение библиотеки.
-  String wifiSsid;
-  String wifiPass;
-
-  // MQTT settings
-  String mqttServerIp;
-  uint16_t mqttServerPort;
-  String mqttUsername;
-  String mqttPassword;
-  uint32_t mqttStatusDelay;
-  uint32_t mqttAvaibleDelay;
-  String mqttTopicPrefix;
-
-  // Timers
-  Timers timers; 
-};
-
-
-Data data;
+// Зеркала настроек в оперативке (прежняя struct Data) больше нет: каждый
+// параметр читается из слоя там, где нужен. Именно зеркало было точкой
+// связывания -- добавление устройства требовало правки общей структуры,
+// а расхождение копии с базой уже приводило к багу с forceAP.
 GyverPortal portal;
+
+// Единственное исключение: расписание таймеров держится в памяти, потому что
+// timerHandle() читает его раз в секунду и лазить за 25 ячейками на каждый
+// тик незачем. Это кэш с одной точкой загрузки (timersLoad), а не зеркало.
+Timers timers;
 GPlog glog("log");
 
 
@@ -123,8 +82,7 @@ ESPRelay Relay1;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
 
-void updateConfig();
-void readConfig();
+void timersLoad();
 void publishRelay();
 void SendDiscoveryMessage();
 void SendAvailableMessage(const String &mode );
@@ -150,7 +108,7 @@ void setup() {
 
 void loop(){
   ArduinoOTA.handle();
-  db.tick();
+  settings::tick();
   mqttClient.loop();
   mqttPublish();
   portal.tick();

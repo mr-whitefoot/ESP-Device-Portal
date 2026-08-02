@@ -13,6 +13,17 @@ void print(const String& text){
 TimerScheduler timerScheduler;
 
 
+void timersLoad(){
+  for(uint8_t i=0; i<TIMER_COUNT; i++){
+    timers.timer[i].enable  = settings::getBool(keys::timer::enable[i]);
+    timers.timer[i].action  = (uint8_t)settings::getInt(keys::timer::action[i]);
+    timers.timer[i].hours   = (uint8_t)settings::getInt(keys::timer::hours[i]);
+    timers.timer[i].minutes = (uint8_t)settings::getInt(keys::timer::minutes[i]);
+    timers.timer[i].seconds = (uint8_t)settings::getInt(keys::timer::seconds[i]);
+  }
+}
+
+
 void timerHandle(){
   // До первой синхронизации NTPClient отсчитывает время от нуля, то есть
   // отдаёт 00:00:xx: таймер на начало суток срабатывал бы сразу после
@@ -27,65 +38,19 @@ void timerHandle(){
                  (uint32_t)timeClient.getMinutes() * 60UL +
                  (uint32_t)timeClient.getSeconds();
 
-  uint32_t due = timerScheduler.due(data.timers, now);
+  uint32_t due = timerScheduler.due(timers, now);
   if(!due) return;
 
   for(uint8_t i=0; i<TIMER_COUNT; i++){
     if(!(due & (1UL << i))) continue;
 
     println("Timer "+String(i)+" activating");
-    switch(data.timers.timer[i].action){
+    switch(timers.timer[i].action){
       case TIMER_ACTION_ON:     Relay1.SetState(true);  break;
       case TIMER_ACTION_OFF:    Relay1.SetState(false); break;
       case TIMER_ACTION_TOGGLE: Relay1.ResetState();    break;
     }
   }
-}
-
-
-void readConfig(){
-  data.deviceName = db[keys::deviceName].toString();
-  data.relayInvertMode = db[keys::relayInvertMode];
-  data.saveRelayStatus = db[keys::saveRelayStatus];
-  data.relayState = db[keys::relayState];
-  data.timezone = db[keys::timezone];
-
-  data.wifiSsid = db[wifi::ssid].toString();
-  data.wifiPass = db[wifi::password].toString();
-
-  data.mqttServerIp = db[mqtt::serverIp].toString();
-  data.mqttServerPort = db[mqtt::serverPort];
-  data.mqttUsername = db[mqtt::username].toString();
-  data.mqttPassword = db[mqtt::password1].toString();
-  data.mqttStatusDelay = db[mqtt::status_delay];
-  data.mqttAvaibleDelay = db[mqtt::avaible_delay];
-  data.mqttTopicPrefix = db[mqtt::topicPrefix].toString();
-
-  db[keys::timer].writeTo(data.timers);
-}
-
-
-void updateConfig(){
-  db[keys::deviceName] = data.deviceName;
-  db[keys::relayInvertMode] = data.relayInvertMode;
-  db[keys::saveRelayStatus] = data.saveRelayStatus;
-  db[keys::relayState] = data.relayState;
-  db[keys::timezone] = data.timezone;
-
-  db[wifi::ssid] = data.wifiSsid;
-  db[wifi::password] = data.wifiPass;
-
-  db[mqtt::serverIp] = data.mqttServerIp;
-  db[mqtt::serverPort] = data.mqttServerPort;
-  db[mqtt::username] = data.mqttUsername;
-  db[mqtt::password1] = data.mqttPassword;
-  db[mqtt::status_delay] = data.mqttStatusDelay;
-  db[mqtt::avaible_delay] = data.mqttAvaibleDelay;
-  db[mqtt::topicPrefix] = data.mqttTopicPrefix;
-
-  db[keys::timer] = data.timers;
-
-  db.update();
 }
 
 
@@ -95,44 +60,50 @@ void portalStart(){
   portal.disableAuth();
   portal.attach(portalAction);
   portal.OTA.attachUpdateBuild(OTAbuild);
-  portal.start(data.deviceName.c_str());
+  portal.start(settings::getStringValue(keys::dev::name).c_str());
   portal.enableOTA();
 }
 
 
-void timerRead(){
-  db[keys::timer].writeTo(data.timers);
-}
-
-
-void dbSetup(){
+void settingsSetup(){
   Serial.println("-----------------------------");
-  Serial.println("Initialize database:");
-  LittleFS.begin();
+  Serial.println("Initialize settings:");
 
-  if (!db.begin()){
-    Serial.println("Database initialize error"); };
+  if (!settings::begin()){
+    Serial.println("Settings initialize error"); };
 
-  db.init(keys::deviceName, "ESP Relay");
-  db.init(keys::relayInvertMode, false);
-  db.init(keys::saveRelayStatus, false);
-  db.init(keys::relayState, false);
-  db.init(keys::timezone, TIMEZONE_UTC);
+  // define создаёт параметр, только если его ещё нет, и никогда не трогает
+  // сохранённое. Именно поэтому новый параметр в следующей прошивке получит
+  // значение по умолчанию, а остальные переживут обновление.
+  settings::defineString(keys::dev::name, "ESP Relay");
+  settings::defineInt(keys::dev::timezone, TIMEZONE_UTC);
 
-  db.init(mqtt::topicPrefix, "homeassistant");
-  db.init(mqtt::serverPort, 1883 );
-  db.init(mqtt::status_delay, 10);
-  db.init(mqtt::avaible_delay, 60);
+  settings::defineBool(keys::relay::invert, false);
+  settings::defineBool(keys::relay::saveState, false);
+  settings::defineBool(keys::relay::state, false);
+
+  settings::defineString(keys::mqtt::topicPrefix, "homeassistant");
+  settings::defineInt(keys::mqtt::port, 1883);
+  settings::defineInt(keys::mqtt::statusDelay, 10);
+  settings::defineInt(keys::mqtt::availableDelay, 60);
+
+  for(uint8_t i=0; i<TIMER_COUNT; i++){
+    settings::defineBool(keys::timer::enable[i], false);
+    settings::defineInt(keys::timer::action[i], TIMER_ACTION_ON);
+    settings::defineInt(keys::timer::hours[i], 0);
+    settings::defineInt(keys::timer::minutes[i], 0);
+    settings::defineInt(keys::timer::seconds[i], 0);
+  }
 
   // forceAP инициализирует сама wifi-библиотека в wifiSetup(): ключ должен
   // иметь ровно одного владельца.
-  db.init(wifi::ssid, "");
-  db.init(wifi::password, "");
+  settings::defineString(keys::wifi::ssid, "");
+  settings::defineString(keys::wifi::password, "");
 
-  readConfig();
+  timersLoad();
 
   #ifdef DEBUG_DB
-    db.dump(Serial);
+    settings::detail::db().dump(Serial);
     println(" ");
   #endif
 }
@@ -146,21 +117,23 @@ void startup(){
   println("");println("");println("");
   println("-------------------------------");
   println("Booting...");
-  
-  //Database
-  dbSetup();
-  
+
+  //Settings
+  settingsSetup();
+
   //Relay
   println("Initialize relay");
-  Relay1.begin(RELAY_PIN, data.relayInvertMode);
+  Relay1.begin(RELAY_PIN, settings::getBool(keys::relay::invert));
   Relay1.ChangeStateCallback(ChangeRelayState);
-  if(data.saveRelayStatus){ 
+  if(settings::getBool(keys::relay::saveState)){
       println("Restore relay state");
-      Relay1.SetState(data.relayState); };
+      Relay1.SetState(settings::getBool(keys::relay::state)); };
 
   // WiFi
-  wifiSetup(data.deviceName, &db);
-  
+  // Библиотека работает с базой напрямую, поэтому получает экземпляр из
+  // слоя. Уйдёт вместе с переходом на DBConnector.
+  wifiSetup(settings::getStringValue(keys::dev::name), &settings::detail::db());
+
   // Enable OTA update
   println("Starting OTA updates");
   ArduinoOTA.begin();
@@ -168,10 +141,10 @@ void startup(){
   //MQTT
   mqttStart();
 
-  //NTP 
+  //NTP
   println("Starting NTP");
   timeClient.setPoolServerName("pool.ntp.org");
-  timeClient.setTimeOffset(tzOffsetSeconds(data.timezone));
+  timeClient.setTimeOffset(tzOffsetSeconds(settings::getInt(keys::dev::timezone)));
   timeClient.begin();
 
   // Timers handler
@@ -189,9 +162,7 @@ void startup(){
 
 void factoryReset(){
   println("Factory reset");
-  db.clear();
-  db.update();
-  readConfig();
+  settings::clear();
   restart();
 }
 
@@ -202,17 +173,18 @@ void restart(){
   SendAvailableMessage("offline");
   mqttClient.loop();
   portal.tick();
-  updateConfig();
+  settings::commit();
   ESP.restart();
 }
 
 
 void ChangeRelayState(){
   println("Change relay state triggered");
-  if(data.saveRelayStatus){
-    println("Save relay state");
-    data.relayState = Relay1.GetState();
-    updateConfig();
+  if(settings::getBool(keys::relay::saveState)){
+    // Без commit: запись на флеш откладывается до settings::tick(). Иначе
+    // автоматизация, дёргающая реле раз в несколько секунд, переписывала бы
+    // файл базы на каждое переключение.
+    settings::setBool(keys::relay::state, Relay1.GetState());
   }
   publishRelay();
 }

@@ -14,24 +14,33 @@ String timezoneOptions(){
 void createTimerUi(const int index){
   GP.BLOCK_TAB_BEGIN("Timer");
     GP.BOX_BEGIN(GP_EDGES);
-      GP.LABEL("Timer"); GP.SWITCH("timerEnable"+String(index), data.timers.timer[index].enable);
+      GP.LABEL("Timer"); GP.SWITCH("timerEnable"+String(index), timers.timer[index].enable);
     GP.BOX_END();
-    GP.SELECT("timerHours"+String(index),"00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23", data.timers.timer[index].hours);
-    GP.SELECT("timerMinutes"+String(index),"00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59",data.timers.timer[index].minutes);
-    GP.SELECT("timerSeconds"+String(index),"00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59",data.timers.timer[index].seconds);
+    GP.SELECT("timerHours"+String(index),"00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23", timers.timer[index].hours);
+    GP.SELECT("timerMinutes"+String(index),"00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59",timers.timer[index].minutes);
+    GP.SELECT("timerSeconds"+String(index),"00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59",timers.timer[index].seconds);
     GP.BOX_BEGIN(GP_EDGES);
-      GP.LABEL("Action"); GP.SELECT("timerAction"+String(index), "On,Off,Toggle", data.timers.timer[index].action);
+      GP.LABEL("Action"); GP.SELECT("timerAction"+String(index), "On,Off,Toggle", timers.timer[index].action);
     GP.BOX_END();
   GP.BLOCK_END();
 }
 
 
-void copyTimer( const int index){
-   portal.copyBool("timerEnable"+String(index),data.timers.timer[index].enable);
-   portal.copyInt("timerAction"+String(index),data.timers.timer[index].action);
-   portal.copyInt("timerHours"+String(index),data.timers.timer[index].hours);
-   portal.copyInt("timerMinutes"+String(index),data.timers.timer[index].minutes);
-   portal.copyInt("timerSeconds"+String(index),data.timers.timer[index].seconds);
+void saveTimer(const int index){
+  bool enable = false;
+  int action = 0, hours = 0, minutes = 0, seconds = 0;
+
+  portal.copyBool("timerEnable"+String(index), enable);
+  portal.copyInt("timerAction"+String(index), action);
+  portal.copyInt("timerHours"+String(index), hours);
+  portal.copyInt("timerMinutes"+String(index), minutes);
+  portal.copyInt("timerSeconds"+String(index), seconds);
+
+  settings::setBool(keys::timer::enable[index], enable);
+  settings::setInt(keys::timer::action[index], action);
+  settings::setInt(keys::timer::hours[index], hours);
+  settings::setInt(keys::timer::minutes[index], minutes);
+  settings::setInt(keys::timer::seconds[index], seconds);
 }
 
 
@@ -89,19 +98,19 @@ void portalBuild(){
       GP.TITLE("Preferences");
       GP.HR();
       GP.BLOCK_TAB_BEGIN("Device name");
-        GP.TEXT("deviceName", "Device name", data.deviceName); GP.BREAK();
+        GP.TEXT("deviceName", "Device name", settings::getStringValue(keys::dev::name)); GP.BREAK();
       GP.BLOCK_END();
 
       GP.BLOCK_TAB_BEGIN("Settings");
         GP.BOX_BEGIN(GP_EDGES);
-          GP.LABEL("Relay invert mode"); GP.SWITCH("relayInvertMode", data.relayInvertMode);
+          GP.LABEL("Relay invert mode"); GP.SWITCH("relayInvertMode", settings::getBool(keys::relay::invert));
         GP.BOX_END();
         GP.BOX_BEGIN(GP_EDGES);
-          GP.LABEL("Save relay status"); GP.SWITCH("relaySaveStatus", data.saveRelayStatus);
+          GP.LABEL("Save relay status"); GP.SWITCH("relaySaveStatus", settings::getBool(keys::relay::saveState));
         GP.BOX_END();
         GP.BOX_BEGIN(GP_EDGES);
           GP.LABEL("Timezone"); 
-          GP.SELECT("timezone", timezoneOptions(), data.timezone);
+          GP.SELECT("timezone", timezoneOptions(), settings::getInt(keys::dev::timezone));
         GP.BOX_END();
       GP.BLOCK_END();
 
@@ -153,8 +162,8 @@ void portalBuild(){
         GP.BLOCK_END();
 
         GP.BLOCK_TAB_BEGIN("Settings");
-          GP.TEXT("ssid", "SSID", data.wifiSsid);GP.BREAK();
-          GP.PASS("pass", "Password", data.wifiPass);GP.BREAK();
+          GP.TEXT("ssid", "SSID", settings::getStringValue(keys::wifi::ssid));GP.BREAK();
+          GP.PASS("pass", "Password", settings::getStringValue(keys::wifi::password));GP.BREAK();
         GP.BLOCK_END();
 
         GP.HR();
@@ -176,20 +185,20 @@ void portalBuild(){
       GP.BLOCK_END();
 
       GP.BLOCK_TAB_BEGIN("Server");
-        GP.TEXT("mqttServerIp", "Server", data.mqttServerIp); GP.BREAK();
-        GP.NUMBER("mqttServerPort", "Port", data.mqttServerPort); GP.BREAK();
-        GP.TEXT("mqttUsername", "Username", data.mqttUsername); GP.BREAK();
-        GP.PASS("mqttPassword", "Password", data.mqttPassword); GP.BREAK();
+        GP.TEXT("mqttServerIp", "Server", settings::getStringValue(keys::mqtt::host)); GP.BREAK();
+        GP.NUMBER("mqttServerPort", "Port", settings::getInt(keys::mqtt::port)); GP.BREAK();
+        GP.TEXT("mqttUsername", "Username", settings::getStringValue(keys::mqtt::username)); GP.BREAK();
+        GP.PASS("mqttPassword", "Password", settings::getStringValue(keys::mqtt::password)); GP.BREAK();
       GP.BLOCK_END();
 
       GP.BLOCK_TAB_BEGIN("MQTT Message periods");
-        GP.NUMBER("avaible_delay", "Avaible", data.mqttAvaibleDelay); GP.BREAK();
-        GP.NUMBER("status_delay", "Message", data.mqttStatusDelay); GP.BREAK();
+        GP.NUMBER("avaible_delay", "Avaible", settings::getInt(keys::mqtt::availableDelay)); GP.BREAK();
+        GP.NUMBER("status_delay", "Message", settings::getInt(keys::mqtt::statusDelay)); GP.BREAK();
       GP.BLOCK_END();
 
       GP.BLOCK_TAB_BEGIN("MQTT topics");
         GP.LABEL("Topic prefix"); GP.BREAK();
-        GP.TEXT("topicPrefix", "Topic prefix", data.mqttTopicPrefix); GP.BREAK();
+        GP.TEXT("topicPrefix", "Topic prefix", settings::getStringValue(keys::mqtt::topicPrefix)); GP.BREAK();
       GP.BLOCK_END();
 
       GP.HR();
@@ -219,7 +228,7 @@ void portalBuild(){
     GP.FORM_BEGIN(form.root);
        GP.BLOCK_TAB_BEGIN("Control");
         GP.BOX_BEGIN(GP_EDGES);
-          GP.LABEL( data.deviceName ); GP.SWITCH("switch", Relay1.GetState());
+          GP.LABEL( settings::getStringValue(keys::dev::name) ); GP.SWITCH("switch", Relay1.GetState());
         GP.BOX_END();
       GP.BLOCK_END();
 
@@ -281,11 +290,9 @@ void portalCheckForm(){
   if (portal.form()) {
     //WiFi config
     if (portal.form(form.WiFiConfig)) {
-      data.wifiSsid  = portal.getString("ssid");
-      data.wifiPass = portal.getString("pass");
-      // Пишем прямо в базу, минуя Data: флагом владеет wifi-библиотека.
-      db[wifi::forceAP] = false;
-      updateConfig();
+      settings::setString(keys::wifi::ssid, portal.getString("ssid").c_str());
+      settings::setString(keys::wifi::password, portal.getString("pass").c_str());
+      settings::setBool(keys::wifi::forceAP, false);
       restart();
 
     // Factory reset
@@ -296,31 +303,37 @@ void portalCheckForm(){
 
     // Preferences
     } else if(portal.form(form.preferences)){
-      data.deviceName = portal.getString("deviceName");
-      data.relayInvertMode = portal.getCheck("relayInvertMode");
-      Relay1.SetInvertMode( data.relayInvertMode );
-      data.timezone = portal.getInt("timezone");
-      timeClient.setTimeOffset(tzOffsetSeconds(data.timezone));
-      
-      updateConfig();
+      settings::setString(keys::dev::name, portal.getString("deviceName").c_str());
+
+      bool invert = portal.getCheck("relayInvertMode");
+      settings::setBool(keys::relay::invert, invert);
+      Relay1.SetInvertMode(invert);
+
+      settings::setBool(keys::relay::saveState, portal.getCheck("relaySaveStatus"));
+
+      int32_t timezone = portal.getInt("timezone");
+      settings::setInt(keys::dev::timezone, timezone);
+      timeClient.setTimeOffset(tzOffsetSeconds(timezone));
+
+      settings::commit();
 
       //MQTT Config
     } else if(portal.form(form.mqttConfig)){
-      data.mqttServerIp = portal.getString("mqttServerIp");
-      data.mqttServerPort = portal.getInt("mqttServerPort");
-      data.mqttUsername = portal.getString("mqttUsername");
-      data.mqttPassword = portal.getString("mqttPassword");
-      data.mqttAvaibleDelay = portal.getInt("avaible_delay");
-      data.mqttStatusDelay = portal.getInt("status_delay");
-      data.mqttTopicPrefix = portal.getString("topicPrefix");
+      settings::setString(keys::mqtt::host, portal.getString("mqttServerIp").c_str());
+      settings::setInt(keys::mqtt::port, portal.getInt("mqttServerPort"));
+      settings::setString(keys::mqtt::username, portal.getString("mqttUsername").c_str());
+      settings::setString(keys::mqtt::password, portal.getString("mqttPassword").c_str());
+      settings::setInt(keys::mqtt::availableDelay, portal.getInt("avaible_delay"));
+      settings::setInt(keys::mqtt::statusDelay, portal.getInt("status_delay"));
+      settings::setString(keys::mqtt::topicPrefix, portal.getString("topicPrefix").c_str());
 
-      updateConfig();
       restart();
 
       //Timers
     } else if(portal.form(form.timers)){
-        for(int i=0; i < TIMER_COUNT; i++){ copyTimer(i); };
-        updateConfig();
+        for(int i=0; i < TIMER_COUNT; i++){ saveTimer(i); };
+        settings::commit();
+        timersLoad();   // обновить кэш расписания
     }
   }
 
@@ -352,16 +365,12 @@ void portalAction(){
   if (portal.click()){
     Serial.println("Portal click");
 
+    // Переключатели инверсии и сохранения состояния разбираются в обработчике
+    // формы Preferences по кнопке Save, как и остальные её поля. Здесь были
+    // отдельные обработчики кликов, причём один из них с опечаткой в имени
+    // ("relayInverMode") и потому мёртвый, а второй сохранял настройку в обход
+    // кнопки Save -- поведение расходилось между двумя переключателями.
     if (portal.click("switch")){ Relay1.SetState( portal.getCheck("switch") ); }
-    if (portal.click("relayInverMode")){
-      data.relayInvertMode = portal.getCheck("relayInverMode");
-      Relay1.SetInvertMode( data.relayInvertMode );
-      updateConfig();
-    }
-    if (portal.click("relaySaveStatus")){
-      data.saveRelayStatus = portal.getCheck("relaySaveStatus");
-      updateConfig();
-    }
     if (portal.click("rebootButton")){ restart(); }
   }
 }

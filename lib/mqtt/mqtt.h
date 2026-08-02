@@ -29,14 +29,17 @@ MQTTData mqttData;
 
 
 void mqttReadConfig() {
-  mqttData.connection.serverIp = data.mqttServerIp;
-  mqttData.connection.serverPort = data.mqttServerPort;
-  mqttData.connection.username = data.mqttUsername;
-  mqttData.connection.password = data.mqttPassword;
-  mqttData.connection.clientName = data.deviceName;
-  mqttData.connection.topicPrefix = data.mqttTopicPrefix;
-  mqttData.connection.status_delay = data.mqttStatusDelay;
-  mqttData.connection.avaible_delay = data.mqttAvaibleDelay;
+  // Настройки читаются один раз при старте и оседают в mqttData: строки
+  // подключения нужны клиенту на всё время работы, а буфер топика ещё и
+  // должен пережить сам клиент -- завещание хранит на него сырой указатель.
+  mqttData.connection.serverIp = settings::getStringValue(keys::mqtt::host);
+  mqttData.connection.serverPort = settings::getInt(keys::mqtt::port);
+  mqttData.connection.username = settings::getStringValue(keys::mqtt::username);
+  mqttData.connection.password = settings::getStringValue(keys::mqtt::password);
+  mqttData.connection.clientName = settings::getStringValue(keys::dev::name);
+  mqttData.connection.topicPrefix = settings::getStringValue(keys::mqtt::topicPrefix);
+  mqttData.connection.status_delay = settings::getInt(keys::mqtt::statusDelay);
+  mqttData.connection.avaible_delay = settings::getInt(keys::mqtt::availableDelay);
 }
 
 
