@@ -19,6 +19,9 @@ struct MQTTTopic{
 struct MQTTData{
   MQTTConnection connection;
   MQTTTopic topic;
+  // Имя устройства, приведённое к допустимым в топике символам.
+  // Отображаемое имя остаётся в connection.clientName как есть.
+  String topicName;
 };
 
 
@@ -39,7 +42,11 @@ void mqttReadConfig() {
 
 void topicCreate(){
   String topicPrefix = mqttData.connection.topicPrefix;
-  String deviceName = mqttData.connection.clientName;
+
+  char safeName[64];
+  sanitizeTopicSegment(mqttData.connection.clientName.c_str(), safeName, sizeof(safeName));
+  mqttData.topicName = safeName;
+  const String& deviceName = mqttData.topicName;
 
   mqttData.topic.discovery = topicPrefix + "/switch/" + deviceName + "/config";
   mqttData.topic.avaible = topicPrefix + "/switch/" + deviceName + "/avaible";
@@ -175,7 +182,7 @@ void SendDiscoveryMessage( ){
 
   doc["name"]         = device_name;
   doc["uniq_id"]      = chipId;
-  doc["object_id"]    = "ESP_"+device_name+"_"+WiFi.macAddress();
+  doc["object_id"]    = "ESP_"+mqttData.topicName+"_"+WiFi.macAddress();
   doc["ip"]           = WiFi.localIP().toString();
   doc["mac"]          = WiFi.macAddress();
   doc["avty_t"]       = getAvaibleTopic();
