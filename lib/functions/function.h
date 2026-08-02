@@ -143,8 +143,7 @@ void startup(){
   
   //Relay
   println("Initialize relay");
-  Relay1.SetPin(RELAY_PIN);
-  Relay1.SetInvertMode(data.relayInvertMode);
+  Relay1.begin(RELAY_PIN, data.relayInvertMode);
   Relay1.ChangeStateCallback(ChangeRelayState);
   if(data.saveRelayStatus){ 
       println("Restore relay state");
