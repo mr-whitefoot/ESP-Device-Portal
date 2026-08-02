@@ -159,14 +159,14 @@ void publishRelay() {
   #ifdef DEBUG_MQTT
     println("MQTT publish status");
   #endif
-  DynamicJsonDocument doc(256);
-  char buffer[256];
+  JsonDocument doc;
   doc["switch"] = Relay1.GetState();
-  doc["WiFiRSSI"] = WiFi.RSSI(); 
+  doc["WiFiRSSI"] = WiFi.RSSI();
   doc["IPAddress"] = WiFi.localIP().toString();
 
-  serializeJson(doc, buffer);
-  mqttClient.publish(getStateTopic(), buffer, false);
+  String payload;
+  serializeJson(doc, payload);
+  mqttClient.publish(getStateTopic(), payload, false);
 }
 
 
@@ -174,8 +174,11 @@ void SendDiscoveryMessage( ){
   #ifdef DEBUG_MQTT
     println("MQTT publish discovery message");
   #endif
-  DynamicJsonDocument doc(1024);
-  char buffer[1024];
+  // Раньше документ сериализовался в char[1024]. Полезная нагрузка с длинным
+  // именем устройства подбиралась к этому пределу вплотную, а serializeJson
+  // при нехватке места молча обрезает вывод -- в брокер уходил битый JSON.
+  // JsonDocument растёт по месту, payload тоже, обрезать нечему.
+  JsonDocument doc;
 
   String device_name = mqttData.connection.clientName;
   uint32_t chipId = ESP.getChipId();
@@ -197,7 +200,7 @@ void SendDiscoveryMessage( ){
   doc["dev_cla"]      = "switch";
   doc["val_tpl"]      = "{{ value_json.switch|default(false) }}";
 
-  JsonObject device = doc.createNestedObject("device");
+  JsonObject device = doc["device"].to<JsonObject>();
   device["name"] = device_name;
   device["model"] = "ESP_" + device_name + "_hw1.0";
   device["configuration_url"] = "http://"+WiFi.localIP().toString();
@@ -208,11 +211,16 @@ void SendDiscoveryMessage( ){
   //connections.add("ip,"+ WiFi.localIP().toString());
   //connections.add("mac,"+ WiFi.macAddress());
 
-  JsonArray identifiers = device.createNestedArray("identifiers");
+  JsonArray identifiers = device["identifiers"].to<JsonArray>();
   identifiers.add(WiFi.macAddress());
 
-  serializeJson(doc, buffer);
-  mqttClient.publish(getDiscoveryTopic(), buffer, true);
+  String payload;
+  serializeJson(doc, payload);
+
+  // Сообщение крупное, и при превышении буфера PubSubClient молча его не
+  // отправит: без явной проверки автообнаружение отваливается беззвучно.
+  if (!mqttClient.publish(getDiscoveryTopic(), payload, true))
+    println("MQTT discovery publish failed, size "+String(payload.length()));
 }
 
 
