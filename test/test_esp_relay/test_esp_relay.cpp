@@ -42,6 +42,38 @@ void test_boot_never_activates_normal_relay(void) {
   TEST_ASSERT_FALSE(relay.GetState());
 }
 
+// Уровень обязан попасть в защёлку ДО pinMode(OUTPUT): иначе ножка выходит
+// с нулём из сброшенного регистра, и на плате с инверсией реле щёлкает.
+void test_level_is_set_before_pin_becomes_output(void) {
+  ESPRelay relay;
+  relay.begin(RELAY_PIN, true);
+
+  TEST_ASSERT_TRUE_MESSAGE(pinWrites().size() > 0, "уровень не выставлен вовсе");
+  TEST_ASSERT_EQUAL_MESSAGE(HIGH, pinWrites()[0].level,
+                            "первым делом должен уйти неактивный уровень");
+  TEST_ASSERT_EQUAL_MESSAGE(1, pinModeCalls().size(), "pinMode вызван не один раз");
+}
+
+// Реле с сохранённым включённым состоянием обязано подняться включённым
+// одним движением, без промежуточного выключения.
+void test_restores_saved_on_state_without_toggling(void) {
+  ESPRelay relay;
+  relay.begin(RELAY_PIN, true, true);
+
+  TEST_ASSERT_TRUE(relay.GetState());
+  for (const PinWrite& w : pinWrites())
+    TEST_ASSERT_EQUAL_MESSAGE(LOW, w.level, "реле выключалось по дороге к включению");
+}
+
+void test_restores_saved_on_state_normal_mode(void) {
+  ESPRelay relay;
+  relay.begin(RELAY_PIN, false, true);
+
+  TEST_ASSERT_TRUE(relay.GetState());
+  for (const PinWrite& w : pinWrites())
+    TEST_ASSERT_EQUAL_MESSAGE(HIGH, w.level, "реле выключалось по дороге к включению");
+}
+
 void test_begin_configures_pin(void) {
   ESPRelay relay;
   relay.begin(RELAY_PIN, false);
@@ -111,6 +143,9 @@ int main(int argc, char** argv) {
   RUN_TEST(test_constructor_does_not_touch_pin);
   RUN_TEST(test_boot_never_activates_inverted_relay);
   RUN_TEST(test_boot_never_activates_normal_relay);
+  RUN_TEST(test_level_is_set_before_pin_becomes_output);
+  RUN_TEST(test_restores_saved_on_state_without_toggling);
+  RUN_TEST(test_restores_saved_on_state_normal_mode);
   RUN_TEST(test_begin_configures_pin);
   RUN_TEST(test_set_state_respects_invert_mode);
   RUN_TEST(test_reset_state_toggles);

@@ -14,11 +14,22 @@ class ESPRelay{
 
     // Инверсия обязана быть известна до первой записи в пин, поэтому пин
     // и режим настраиваются одним вызовом.
-    void begin( int pin, bool invertMode ){
+    //
+    // initialState -- состояние, с которым реле должно подняться. Передавать
+    // сюда сохранённое значение важно: иначе пин сперва уходит в "выключено",
+    // а затем во "включено", и реле щёлкает дважды на каждой загрузке.
+    void begin( int pin, bool invertMode, bool initialState = false ){
       this->pin = pin;
       this->invertMode = invertMode;
+      this->relayState = initialState;
+
+      // Уровень задаётся ДО перевода пина в выход. pinMode(OUTPUT) выставляет
+      // на ножку содержимое защёлки, а она после сброса нулевая -- на плате с
+      // активным низким уровнем это кратковременное включение реле. До этого
+      // GPIO0 держится внешней подтяжкой в HIGH, иначе ESP-01 не загрузится,
+      // то есть реле выключено, и щелчка быть не должно вовсе.
+      digitalWrite(pin, levelFor(initialState));
       pinMode(pin, OUTPUT);
-      SetState(false);
     }
 
     // Смена режима с сохранением логического состояния: меняется полярность
@@ -29,14 +40,8 @@ class ESPRelay{
     }
 
     void SetState( bool relayState ){
-      if (relayState){
-        if (invertMode == true) digitalWrite(pin, LOW );
-        else digitalWrite(pin, HIGH );
-        this->relayState = true; }
-      else{
-        if (invertMode == true) digitalWrite(pin, HIGH );
-        else digitalWrite(pin, LOW );
-        this->relayState = false; }
+      digitalWrite(pin, levelFor(relayState));
+      this->relayState = relayState;
 
       if (CallbackHandler) CallbackHandler();
     }
@@ -51,6 +56,12 @@ class ESPRelay{
     }
 
   protected:
+    // Уровень на ножке, соответствующий логическому состоянию.
+    int levelFor( bool on ) const {
+      if (invertMode) return on ? LOW : HIGH;
+      return on ? HIGH : LOW;
+    }
+
     int pin;
     bool invertMode;
     bool relayState = false;

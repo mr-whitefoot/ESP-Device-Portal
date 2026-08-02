@@ -41,12 +41,23 @@ void timersLoad() {
 
 void onRelayChanged() {
   println("Change relay state triggered");
+
   if (settings::getBool(keys::relay::saveState)) {
-    // Без commit: запись на флеш откладывается до settings::tick(). Иначе
-    // автоматизация, дёргающая реле раз в несколько секунд, переписывала бы
-    // файл базы на каждое переключение.
-    settings::setBool(keys::relay::state, relay.GetState());
+    bool state = relay.GetState();
+
+    // Пишем сразу, а не откладываем до settings::tick(). Отложенная запись
+    // экономила ресурс флеша, но GyverDBFile сбрасывает файл только через
+    // 10 секунд после изменения, и снятие питания в этом окне теряло
+    // состояние -- ровно то, ради чего настройка и существует.
+    //
+    // Запись только при фактическом изменении: SetInvertMode переприменяет
+    // текущее состояние, да и повторная команда по MQTT приходит регулярно.
+    if (settings::getBool(keys::relay::state) != state) {
+      settings::setBool(keys::relay::state, state);
+      settings::commit();
+    }
   }
+
   publishState();
 }
 
@@ -135,15 +146,14 @@ void defineSettings() {
 }
 
 void begin() {
-  // Инверсия обязана быть известна до первой записи в пин, иначе на плате с
-  // активным низким уровнем реле включится на всё время загрузки.
-  detail::relay.begin(RELAY_PIN, settings::getBool(keys::relay::invert));
-  detail::relay.ChangeStateCallback(detail::onRelayChanged);
+  // Сохранённое состояние передаётся сразу в begin(): реле поднимается в
+  // нужном положении одним движением, без промежуточного "выключено".
+  bool restored = settings::getBool(keys::relay::saveState) &&
+                  settings::getBool(keys::relay::state);
+  if (restored) println("Restore relay state: on");
 
-  if (settings::getBool(keys::relay::saveState)) {
-    println("Restore relay state");
-    detail::relay.SetState(settings::getBool(keys::relay::state));
-  }
+  detail::relay.begin(RELAY_PIN, settings::getBool(keys::relay::invert), restored);
+  detail::relay.ChangeStateCallback(detail::onRelayChanged);
 
   detail::timersLoad();
 
