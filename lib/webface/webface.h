@@ -1,3 +1,16 @@
+// Список для GP.SELECT собирается из TIMEZONES, чтобы подписи в UI и смещения
+// для NTP приходили из одного места и не могли разойтись.
+String timezoneOptions(){
+  String list;
+  list.reserve(TIMEZONE_COUNT * 7);
+  for(uint8_t i = 0; i < TIMEZONE_COUNT; i++){
+    if(i) list += ',';
+    list += TIMEZONES[i].label;
+  }
+  return list;
+}
+
+
 void createTimerUi(const int index){
   GP.BLOCK_TAB_BEGIN("Timer");
     GP.BOX_BEGIN(GP_EDGES);
@@ -90,7 +103,7 @@ void portalBuild(){
         GP.BOX_END();
         GP.BOX_BEGIN(GP_EDGES);
           GP.LABEL("Timezone"); 
-          GP.SELECT("timezone", "-12:00,-11:00,-10:00,-09:30,-09:00,-08:00,-07:00,-06:00,-05:00,-04:00,-03:30,-03:00,-02:00,-01:00,00:00,+01:00,+02:00,+03:00,+03:30,+04:00,+04:30,+05:00,+05:30,+05:45,+06:00,+06:30,+07:00,+08:00,+08:45,+09:00,+09:30,+10:00,+10:30,+11:00,+12:00,+13:00,+14:00", data.timezone);
+          GP.SELECT("timezone", timezoneOptions(), data.timezone);
         GP.BOX_END();
       GP.BLOCK_END();
 
@@ -289,7 +302,7 @@ void portalCheckForm(){
       Relay1.SetInvertMode( data.relayInvertMode );
       data.theme = portal.getInt("theme");
       data.timezone = portal.getInt("timezone");
-      timeClient.setTimeOffset(convertTimezoneToOffset(data.timezone));
+      timeClient.setTimeOffset(tzOffsetSeconds(data.timezone));
       
       updateConfig();
 

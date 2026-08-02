@@ -10,49 +10,6 @@ void print(const String& text){
 }
 
 
-int convertTimezoneToOffset(byte timezone){
-  if(timezone == 1 ) return -43200; //-12:00 
-  if(timezone == 2 ) return -39600; //-11:00
-  if(timezone == 3 ) return -36000; //-10:00
-  if(timezone == 4 ) return -34200; //-09:30
-  if(timezone == 5 ) return -32400; //-09:00
-  if(timezone == 6 ) return -28800; //-08:00
-  if(timezone == 7 ) return -25200; //-07:00
-  if(timezone == 8 ) return -21600; //-06:00
-  if(timezone == 9 ) return -18000; //-05:00
-  if(timezone == 10 ) return -14400; //-04:00
-  if(timezone == 11 ) return -12600; //-03:30
-  if(timezone == 12 ) return -10800; //-03:00
-  if(timezone == 13 ) return -7200; //-02:00
-  if(timezone == 14 ) return -3600; //-01:00
-  if(timezone == 15 ) return 0;     //UTC
-  if(timezone == 16 ) return 3600;  //+01:00
-  if(timezone == 17 ) return 7200;  //+02:00
-  if(timezone == 18 ) return 10800; //+03:00
-  if(timezone == 19 ) return 12600; //+03:30
-  if(timezone == 19 ) return 14400; //+04:00
-  if(timezone == 20 ) return 16200; //+04:30
-  if(timezone == 21 ) return 18000; //+05:00
-  if(timezone == 22 ) return 19800; //+05:30
-  if(timezone == 23 ) return 20700; //+05:45
-  if(timezone == 24 ) return 21600; //+06:00
-  if(timezone == 25 ) return 23400; //+06:30
-  if(timezone == 26 ) return 25200; //+07:00
-  if(timezone == 27 ) return 28800; //+08:00
-  if(timezone == 28 ) return 31500; //+08:45
-  if(timezone == 29 ) return 32400; //+09:00
-  if(timezone == 30 ) return 34200; //+09:30
-  if(timezone == 31 ) return 36000; //+10:00
-  if(timezone == 32 ) return 37800; //+10:30
-  if(timezone == 33 ) return 39600; //+11:00
-  if(timezone == 34 ) return 43200; //+12:00
-  if(timezone == 35 ) return 46800; //+13:00
-  if(timezone == 36 ) return 50400; //+14:00
-
-  return 0;
-}
-
-
 void timerHandle(){
   int hours   = timeClient.getHours();
   int minutes = timeClient.getMinutes();
@@ -152,7 +109,7 @@ void dbSetup(){
   db.init(keys::saveRelayStatus, false);
   db.init(keys::relayState, false);
   db.init(keys::theme, LIGHT_THEME);
-  db.init(keys::timezone, 14);
+  db.init(keys::timezone, TIMEZONE_UTC);
 
   db.init(mqtt::topicPrefix, "homeassistant");
   db.init(mqtt::serverPort, 1883 );
@@ -206,7 +163,7 @@ void startup(){
   //NTP 
   println("Starting NTP");
   timeClient.setPoolServerName("pool.ntp.org");
-  timeClient.setTimeOffset(convertTimezoneToOffset(data.timezone));
+  timeClient.setTimeOffset(tzOffsetSeconds(data.timezone));
   timeClient.begin();
 
   // Timers handler

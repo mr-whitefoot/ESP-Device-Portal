@@ -9,6 +9,7 @@
 #include <NTPClient.h>
 #include <GyverDBFile.h>
 #include <LittleFS.h>
+#include <timezone_table.h>
 
 
 //#define DEBUG_MQTT
@@ -135,7 +136,6 @@ void factoryReset();
 void ChangeRelayState();
 void mqttStart();
 void restart();
-int convertTimezoneToOffset(byte timezone);
 void println(const String& text);
 void print(const String& text);
 
