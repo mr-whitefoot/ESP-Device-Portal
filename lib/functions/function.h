@@ -10,22 +10,35 @@ void print(const String& text){
 }
 
 
-void timerHandle(){
-  int hours   = timeClient.getHours();
-  int minutes = timeClient.getMinutes();
-  int seconds = timeClient.getSeconds();
+TimerScheduler timerScheduler;
 
-  for(int i=0; i<TIMER_COUNT; i++){
-    if( data.timers.timer[i].enable  == true &&
-        data.timers.timer[i].hours   == hours &&
-        data.timers.timer[i].minutes == minutes &&
-        data.timers.timer[i].seconds == seconds)
-      {  
-        println("Timer "+String(i)+" activating");
-        if(data.timers.timer[i].action == 0){Relay1.SetState(true);}
-        if(data.timers.timer[i].action == 1){Relay1.SetState(false);}
-        if(data.timers.timer[i].action == 2){Relay1.ResetState();}
-      }
+
+void timerHandle(){
+  // До первой синхронизации NTPClient отсчитывает время от нуля, то есть
+  // отдаёт 00:00:xx: таймер на начало суток срабатывал бы сразу после
+  // включения. Заодно сбрасываем точку отсчёта, чтобы момент синхронизации
+  // не выглядел скачком часов.
+  if(!timeClient.isTimeSet()){
+    timerScheduler.resync();
+    return;
+  }
+
+  uint32_t now = (uint32_t)timeClient.getHours() * 3600UL +
+                 (uint32_t)timeClient.getMinutes() * 60UL +
+                 (uint32_t)timeClient.getSeconds();
+
+  uint32_t due = timerScheduler.due(data.timers, now);
+  if(!due) return;
+
+  for(uint8_t i=0; i<TIMER_COUNT; i++){
+    if(!(due & (1UL << i))) continue;
+
+    println("Timer "+String(i)+" activating");
+    switch(data.timers.timer[i].action){
+      case TIMER_ACTION_ON:     Relay1.SetState(true);  break;
+      case TIMER_ACTION_OFF:    Relay1.SetState(false); break;
+      case TIMER_ACTION_TOGGLE: Relay1.ResetState();    break;
+    }
   }
 }
 

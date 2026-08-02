@@ -11,6 +11,7 @@
 #include <LittleFS.h>
 #include <timezone_table.h>
 #include <mqtt_topics.h>
+#include <timer_schedule.h>
 
 
 //#define DEBUG_MQTT
@@ -29,21 +30,7 @@ GyverDBFile db(&LittleFS, "/data.db");
 #define LIGHT_THEME 0
 #define DARK_THEME 1
 #define RELAY_PIN 0
-#define TIMER_COUNT 5
 
-
-struct Timer
-{
-  bool enable;
-  byte action;
-  byte hours;
-  byte minutes;
-  byte seconds;
-};
-
-struct Timers{
-  Timer timer[TIMER_COUNT];
-};
 
 enum keys : size_t {
   deviceName = SH("deviceName"),
