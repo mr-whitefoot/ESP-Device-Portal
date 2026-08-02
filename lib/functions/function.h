@@ -65,12 +65,40 @@ void portalStart(){
 }
 
 
+// Версия раскладки настроек. Поднимается только при несовместимом изменении,
+// и тогда же сюда добавляется ветка миграции. Добавление нового параметра
+// версию НЕ меняет: define сам подставит значение по умолчанию, не тронув
+// остальные -- ради этого свойства слой и заводился.
+static const int32_t SETTINGS_SCHEMA = 1;
+
+
+void settingsMigrate(){
+  int32_t schema = settings::getInt(keys::sys::schema);
+  if(schema == SETTINGS_SCHEMA) return;
+
+  if(schema == 0){
+    // Либо чистое устройство, либо прошивка до 3.1.0, где ключи назывались
+    // иначе. Во втором случае старые ячейки всё равно недостижимы, и оставлять
+    // их значит вечно носить около трёхсот байт мусора в файле базы.
+    println("Settings schema 0: starting fresh");
+    settings::clear();
+  }
+
+  settings::setInt(keys::sys::schema, SETTINGS_SCHEMA);
+  settings::commit();
+}
+
+
 void settingsSetup(){
   Serial.println("-----------------------------");
   Serial.println("Initialize settings:");
 
   if (!settings::begin()){
     Serial.println("Settings initialize error"); };
+
+  // Миграция до значений по умолчанию: она может очистить базу, и defineX
+  // ниже наполнят её заново.
+  settingsMigrate();
 
   // define создаёт параметр, только если его ещё нет, и никогда не трогает
   // сохранённое. Именно поэтому новый параметр в следующей прошивке получит
