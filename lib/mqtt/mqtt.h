@@ -56,22 +56,25 @@ void topicCreate(){
 }
 
 
-const String getDiscoveryTopic(){
+// Возврат по ссылке, а не по значению: топики публикуются каждые 10 секунд,
+// и копия String на каждый вызов это лишняя аллокация в куче. Кроме того,
+// enableLastWillMessage() запоминает сырой указатель на буфер строки.
+const String& getDiscoveryTopic(){
   return mqttData.topic.discovery;
 }
 
 
-const String getCommandTopic(){
+const String& getCommandTopic(){
   return mqttData.topic.command;
 }
 
 
-const String getAvaibleTopic(){
+const String& getAvaibleTopic(){
   return mqttData.topic.avaible;
 }
 
 
-const String getStateTopic(){
+const String& getStateTopic(){
   return mqttData.topic.state;
 }
 
@@ -113,6 +116,13 @@ void mqttStart(){
   mqttClient.setMqttClientName(mqttData.connection.clientName.c_str());
   //Setup max lingth of message MQTT
   mqttClient.setMaxPacketSize(2048);
+
+  // Завещание брокеру. Без него пропавшее устройство навсегда остаётся
+  // online в HomeAssistant: периодический avaible просто перестаёт приходить,
+  // а сказать об этом некому.
+  // Указатель сохраняется как есть, поэтому строка обязана пережить клиента:
+  // берём буфер глобального mqttData, заполненный в topicCreate() выше.
+  mqttClient.enableLastWillMessage(mqttData.topic.avaible.c_str(), "offline", true);
 
   // MQTT timers
   println("Starting MQTT timers");
@@ -203,7 +213,9 @@ void SendAvailableMessage(const String &mode = "online"){
   #ifdef DEBUG_MQTT
     println("MQTT publish available message");
   #endif
-  mqttClient.publish(getAvaibleTopic(), mode, false);
+  // retain=true, иначе после перезапуска HomeAssistant сущность висит
+  // unavailable до следующего периодического сообщения.
+  mqttClient.publish(getAvaibleTopic(), mode, true);
 }
 
 
