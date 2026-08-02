@@ -86,23 +86,6 @@ const String& getStateTopic(){
 }
 
 
-bool ToBool( String value){
-  if ( (value == "true" )||
-       (value == "True" )||
-       (value == "TRUE" )){
-        return true;
-       };
-  
-  if ( value == "false" ||
-       value == "False" ||
-       value == "FALSE" ){
-        return false;
-       };
-  
-  return false;
-}
-
-
 void mqttStart(){
   println("Starting MQTT"); 
 
@@ -146,8 +129,8 @@ void onConnectionEstablished() {
   SendAvailableMessage("online");
 
   mqttClient.subscribe(getCommandTopic(), [] (const String &payload)  {
-    println("MQTT received command topic"); 
-    Relay1.SetState( ToBool(payload));
+    println("MQTT received command topic");
+    Relay1.SetState( parseSwitchPayload(payload.c_str(), Relay1.GetState()) );
   });
 }
 
@@ -191,14 +174,17 @@ void SendDiscoveryMessage( ){
   doc["avty_t"]       = getAvaibleTopic();
   doc["pl_avail"]     = "online";
   doc["pl_not_avail"] = "offline";
+  // Явные строки вместо булевых значений. Раньше здесь лежали JSON true/false,
+  // и работало это лишь по совпадению: HomeAssistant приводит их к строкам
+  // "True"/"False", ровно так же, как Jinja рендерит булево значение в шаблоне.
   doc["stat_t"]       = getStateTopic();
-  doc["stat_on"]      = true;
-  doc["stat_off"]     = false;
+  doc["stat_on"]      = "ON";
+  doc["stat_off"]     = "OFF";
   doc["cmd_t"]        = getCommandTopic();
-  doc["pl_on"]        = true;
-  doc["pl_off"]       = false;
+  doc["pl_on"]        = "ON";
+  doc["pl_off"]       = "OFF";
   doc["dev_cla"]      = "switch";
-  doc["val_tpl"]      = "{{ value_json.switch|default(false) }}";
+  doc["val_tpl"]      = "{{ 'ON' if value_json.switch else 'OFF' }}";
 
   JsonObject device = doc["device"].to<JsonObject>();
   device["name"] = device_name;
