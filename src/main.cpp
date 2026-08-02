@@ -18,7 +18,13 @@
 //#define DEBUG_DB
 
 
-String sw_version = "3.0.12";
+// Версия приходит из platformio.ini через -DVERSION, чтобы не разъезжаться
+// с release_version и с именем bin-файла. Макрос подставляется без кавычек,
+// поэтому его нужно превратить в строку.
+#define _STRINGIFY(x) #x
+#define STRINGIFY(x) _STRINGIFY(x)
+
+String sw_version = STRINGIFY(VERSION);
 String release_date = "23.03.2026";
 
 GyverDBFile db(&LittleFS, "/data.db");
@@ -90,7 +96,6 @@ struct Data {
 Data data;
 GyverPortal portal;
 GPlog glog("log");
-WiFiEventHandler onSoftAPModeStationConnected, onSoftAPModeStationDisconnected, onStationModeConnected;
 
 
 struct Form{

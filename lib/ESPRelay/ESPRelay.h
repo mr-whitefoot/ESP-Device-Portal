@@ -56,36 +56,3 @@ class ESPRelay{
     bool relayState = false;
     void (*CallbackHandler)() = nullptr;
 };
-
-
-class ESPRelayButton: public ESPRelay{
-  public:
-    void SetState( bool relayState ){
-      if (relayState){
-        if (invertMode == true) digitalWrite(pin, LOW );
-        else digitalWrite(pin, HIGH );
-
-        this->relayState = true;
-        long now = millis();
-        ButtonOn = now;
-      }
-      else{
-        if (invertMode == true) digitalWrite(pin, HIGH );
-        else digitalWrite(pin, LOW );
-        this->relayState = false; }
-
-      if (*CallbackHandler) CallbackHandler(); 
-    }
-    
-    bool tick( ){
-      long now = millis();
-      if ( relayState == true && (now - ButtonOn) > ButtonClick ){
-          this->SetState(false);
-          return true; }
-      else return false; 
-    }
-
-  private:
-      long ButtonOn = 0;
-      int ButtonClick = 500;
-};
