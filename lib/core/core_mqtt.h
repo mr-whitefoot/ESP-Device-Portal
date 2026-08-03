@@ -22,6 +22,8 @@ struct MQTTData{
   // Имя устройства, приведённое к допустимым в топике символам.
   // Отображаемое имя остаётся в connection.clientName как есть.
   String topicName;
+  // Идентификатор клиента для брокера -- не то же самое, что имя устройства.
+  String clientId;
 };
 
 
@@ -70,6 +72,29 @@ void topicCreate(){
 }
 
 
+void clientIdCreate(){
+  // Идентификатор клиента для брокера, а не отображаемое имя. Прежде сюда
+  // уходило имя устройства как есть, а по умолчанию оно одинаково у всех
+  // железок одной модели ("ESP Relay"). Брокер обязан разорвать прежнюю
+  // сессию, когда подключается второй клиент с тем же идентификатором, --
+  // две одинаково названные железки ушли бы в вечную карусель
+  // переподключений, и диагностируется это отвратительно.
+  //
+  // Спецификация 3.1.1 обязывает брокер принять лишь 23 символа. Почти все
+  // принимают длиннее, но закладываться на это незачем: chip ID занимает
+  // шесть символов, подчёркивание одно, имени остаётся шестнадцать. Различает
+  // устройства всё равно chip ID, а имя здесь только для читаемости в логе
+  // брокера.
+  mqttData.clientId = mqttData.topicName.substring(0, 16) + "_" +
+                      String(ESP.getChipId(), HEX);
+
+  // В лог, а не под DEBUG_MQTT: именно по этой строке в брокере опознаётся
+  // устройство, и она же единственное доказательство, что идентификаторы
+  // двух железок разошлись.
+  println("MQTT client id: " + mqttData.clientId);
+}
+
+
 // Возврат по ссылке, а не по значению: топики публикуются каждые 10 секунд,
 // и копия String на каждый вызов это лишняя аллокация в куче. Кроме того,
 // enableLastWillMessage() запоминает сырой указатель на буфер строки.
@@ -104,13 +129,16 @@ void mqttStart(){
 
   //Create topics
   topicCreate();
+  clientIdCreate();
 
-  mqttClient.setMqttServer( mqttData.connection.serverIp.c_str(), 
-                            mqttData.connection.username.c_str(), 
+  mqttClient.setMqttServer( mqttData.connection.serverIp.c_str(),
+                            mqttData.connection.username.c_str(),
                             mqttData.connection.password.c_str(),
-                            mqttData.connection.serverPort 
+                            mqttData.connection.serverPort
                            );
-  mqttClient.setMqttClientName(mqttData.connection.clientName.c_str());
+  // Указатель сохраняется как есть, поэтому строка обязана пережить клиента --
+  // та же причина, что и у завещания ниже.
+  mqttClient.setMqttClientName(mqttData.clientId.c_str());
   //Setup max lingth of message MQTT
   mqttClient.setMaxPacketSize(2048);
 
@@ -133,6 +161,10 @@ void mqttStart(){
 void onConnectionEstablished() {
   println("MQTT server is connected");
   SendDiscoveryMessage();
+  // Состояние сразу за автообнаружением, не дожидаясь таймера: иначе HA
+  // получает сущность и держит её unknown до ближайшего периодического
+  // сообщения -- десять секунд карточки, которая не знает, включено ли реле.
+  publishState();
   SendAvailableMessage("online");
 
   mqttClient.subscribe(getCommandTopic(), [] (const String &payload)  {
@@ -156,7 +188,12 @@ void publishState() {
 
   String payload;
   serializeJson(doc, payload);
-  mqttClient.publish(getStateTopic(), payload, false);
+
+  // retain=true по той же причине, что и у avaible: без него перезапущенный
+  // HomeAssistant подписывается на пустой топик и держит сущность unknown,
+  // пока не придёт очередное периодическое сообщение.
+  if (!mqttClient.publish(getStateTopic(), payload, true))
+    println("MQTT state publish failed, size "+String(payload.length()));
 }
 
 

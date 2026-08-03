@@ -1,0 +1,9 @@
+; Настройки брокера для tools/mqtt_watch.py.
+; Скопируйте в broker.ini и впишите свои -- broker.ini в .gitignore,
+; потому что содержит пароль.
+
+[broker]
+host = 10.0.1.5
+port = 1883
+username = mqtt
+password =
