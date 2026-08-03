@@ -265,7 +265,7 @@ void portalCheckForm(){
 
       int32_t timezone = portal.getInt("timezone");
       settings::setInt(keys::dev::timezone, timezone);
-      timeClient.setTimeOffset(tzOffsetSeconds(timezone));
+      corentp::setOffsetFromSettings(tzOffsetSeconds(timezone));
 
       settings::commit();
 
@@ -298,7 +298,7 @@ void portalCheckForm(){
 
     portal.updateInt("wifiAPTimer", corewifi::retryLeftSeconds());
 
-    String time = timeClient.getFormattedTime();
+    String time = corentp::formattedTime();
     portal.updateString("time", time);
 
     device::updateUi();
@@ -311,7 +311,11 @@ void portalAction(){
   portalCheckForm();
 
   if (portal.click()){
-    Serial.println("Portal click");
+    // Имя элемента, а не голый факт клика: щелчки реле приходили и тогда,
+    // когда никто ничего не нажимал, а по одному "Portal click" источник не
+    // отличить. println вместо Serial.println -- чтобы строка попадала и в
+    // лог портала, то есть была видна без подключения к serial.
+    println("Portal click: " + portal.clickName());
 
     device::handleClick();
     if (portal.click("rebootButton")){ restart(); }

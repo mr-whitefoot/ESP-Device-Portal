@@ -66,14 +66,14 @@ void scheduleHandle() {
   // отдаёт 00:00:xx: таймер на начало суток срабатывал бы сразу после
   // включения. Заодно сбрасываем точку отсчёта, чтобы момент синхронизации
   // не выглядел скачком часов.
-  if (!timeClient.isTimeSet()) {
+  if (!corentp::isTimeSet()) {
     scheduler.resync();
     return;
   }
 
-  uint32_t now = (uint32_t)timeClient.getHours() * 3600UL +
-                 (uint32_t)timeClient.getMinutes() * 60UL +
-                 (uint32_t)timeClient.getSeconds();
+  uint32_t now = (uint32_t)corentp::hours() * 3600UL +
+                 (uint32_t)corentp::minutes() * 60UL +
+                 (uint32_t)corentp::seconds();
 
   uint32_t due = scheduler.due(timers, now);
   if (!due) return;

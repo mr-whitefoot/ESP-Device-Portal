@@ -2,10 +2,6 @@
 #include <ArduinoJson.h>
 #include <TimerMs.h>
 #include <GyverPortal.h>
-#include <Timezone.h>
-#include <TimeLib.h>
-#include <WiFiUdp.h>
-#include <NTPClient.h>
 #include <settings.h>
 #include <settings_string.h>
 #include <timezone_table.h>
@@ -50,13 +46,8 @@ struct Form{
 
 
 Form form;
-TimerMs MessageTimer, ServiceMessageTimer, NtpTimer;
+TimerMs MessageTimer, ServiceMessageTimer;
 EspMQTTClient mqttClient;
-
-
-// Определение NTP-клиента для получения времени
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP);
 
 void publishState();
 void SendDiscoveryMessage();
@@ -71,7 +62,11 @@ void print(const String& text);
 
 // Ядро сначала, устройство после: ядро зовёт device::*, объявленные в
 // контракте выше, а определения приходят с реализацией устройства.
+#include <core_metrics.h>
 #include <core_wifi.h>
+// После core_wifi.h: адаптеру нужен WiFi.status(), а объявления сети приходят
+// оттуда. До core_portal.h и core_boot.h: они уже зовут corentp::.
+#include <core_ntp.h>
 #include <core_portal.h>
 #include <core_boot.h>
 #include <core_mqtt.h>
@@ -95,12 +90,14 @@ void setup() {
 
 
 void loop(){
-  ArduinoOTA.handle();
-  settings::tick();
-  mqttClient.loop();
-  mqttPublish();
-  portal.tick();
-  corewifi::tick();
-  ntpTick();
-  device::tick();
+  LOOP_METRICS_BEGIN();
+  STAGE(ST_OTA,      ArduinoOTA.handle());
+  STAGE(ST_SETTINGS, settings::tick());
+  STAGE(ST_MQTT,     mqttClient.loop());
+  STAGE(ST_PUBLISH,  mqttPublish());
+  STAGE(ST_PORTAL,   portal.tick());
+  STAGE(ST_WIFI,     corewifi::tick());
+  STAGE(ST_NTP,      ntpTick());
+  STAGE(ST_DEVICE,   device::tick());
+  LOOP_METRICS_END();
 }
