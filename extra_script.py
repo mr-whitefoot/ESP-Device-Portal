@@ -4,7 +4,12 @@ from datetime import date
 
 Import("env")
 
-env.Replace(PROGNAME="ESP_Relay_v%s" % env.GetProjectOption("release_version"))
+# Имя устройства и версия приходят из окружения: одна кодовая база собирает
+# несколько устройств, и по имени bin-файла должно быть видно, какое именно.
+env.Replace(PROGNAME="ESP_%s_v%s" % (
+    env.GetProjectOption("device_name"),
+    env.GetProjectOption("release_version"),
+))
 
 # Дата сборки. Раньше лежала литералом в main.cpp и правилась руками, то есть
 # показывала в портале что угодно, кроме реальной даты прошивки.

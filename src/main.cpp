@@ -50,7 +50,7 @@ struct Form{
 
 
 Form form;
-TimerMs MessageTimer, ServiceMessageTimer;
+TimerMs MessageTimer, ServiceMessageTimer, NtpTimer;
 EspMQTTClient mqttClient;
 
 
@@ -76,7 +76,16 @@ void print(const String& text);
 #include <core_boot.h>
 #include <core_mqtt.h>
 
-#include <device_relay.h>
+// Устройство выбирается окружением сборки, тем же приёмом, что и бэкенд
+// настроек в settings.h. Значения по умолчанию нет намеренно: собранная
+// не тем устройством прошивка молча уедет на железку и щёлкнет чем попало.
+#if defined(DEVICE_RELAY)
+  #include <device_relay.h>
+#elif defined(DEVICE_DS18B20)
+  #include <device_ds18b20.h>
+#else
+  #error "Не выбрано устройство: соберите окружение с -D DEVICE_RELAY или -D DEVICE_DS18B20"
+#endif
 
 
 
@@ -92,6 +101,6 @@ void loop(){
   mqttPublish();
   portal.tick();
   corewifi::tick();
-  timeClient.update();
+  ntpTick();
   device::tick();
 }

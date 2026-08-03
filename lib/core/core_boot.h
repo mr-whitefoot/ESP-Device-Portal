@@ -16,9 +16,83 @@ void portalStart(){
   portal.disableAuth();
   portal.attach(portalAction);
   portal.OTA.attachUpdateBuild(OTAbuild);
-  portal.start(settings::getStringValue(keys::dev::name).c_str());
+  // Имя берётся из corewifi: portal.start() запоминает сырой указатель, и
+  // строка обязана пережить вызов. Временный String из getStringValue умирал
+  // в конце выражения.
+  portal.start(corewifi::portalName.c_str());
   portal.enableOTA();
   corewifi::portalStarted();
+}
+
+
+// Опрос времени.
+//
+// Две беды NTPClient, обе вылезли на живом устройстве.
+//
+// Первая: неудачные попытки он не разводит во времени. _lastUpdate ставится
+// ТОЛЬКО при успехе (NTPClient.cpp:105), а update() пропускает проверку
+// интервала, пока _lastUpdate равен нулю (NTPClient.cpp:121). Голый
+// timeClient.update() в loop() до первой синхронизации срабатывал на каждом
+// проходе. Отсюда свой таймер.
+//
+// Вторая: beginPacket(name, port) резолвит имя на КАЖДУЮ попытку
+// (NTPClient.cpp:200), а неудачный резолв блокирует loop() на таймаут DNS --
+// десятки секунд. Пока время не синхронизировано, портал в эти окна
+// недоступен, то есть ровно тогда, когда устройство настраивают. Поэтому имя
+// резолвится один раз, а клиенту отдаётся точечная запись адреса: её lwIP
+// разбирает сам, не ходя в сеть.
+
+const char* NTP_POOL = "pool.ntp.org";
+
+// Период повторных попыток. Первая делается на загрузке, дальше по нему.
+static const uint32_t NTP_RETRY_MS = 60000;
+
+// Резолв делается с коротким таймаутом: в худшем случае это цена одной
+// попытки в минуту, а не десятки секунд.
+static const uint32_t NTP_RESOLVE_TIMEOUT_MS = 2000;
+
+// Отрезолвленный адрес мог оказаться нерабочим -- пул отдаёт разные машины.
+// После стольких неудач подряд резолвим заново.
+static const uint8_t NTP_RERESOLVE_AFTER = 10;
+
+
+// Строка обязана пережить вызов: setPoolServerName запоминает указатель.
+String ntpServerAddr;
+uint8_t ntpFails = 0;
+
+
+bool ntpResolve(){
+  IPAddress ip;
+  if (!WiFi.hostByName(NTP_POOL, ip, NTP_RESOLVE_TIMEOUT_MS)) return false;
+
+  ntpServerAddr = ip.toString();
+  timeClient.setPoolServerName(ntpServerAddr.c_str());
+  println("NTP server resolved: " + ntpServerAddr);
+  return true;
+}
+
+
+void ntpSync(){
+  // Без сети попытка гарантированно упрётся в таймаут, а это время впустую.
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  if (!ntpServerAddr.length() && !ntpResolve()) return;
+
+  if (timeClient.update()){
+    ntpFails = 0;
+    return;
+  }
+
+  if (++ntpFails >= NTP_RERESOLVE_AFTER){
+    ntpFails = 0;
+    ntpServerAddr = "";  // следующая попытка начнётся с резолва
+  }
+}
+
+
+void ntpTick(){
+  if (!NtpTimer.tick()) return;
+  ntpSync();
 }
 
 
@@ -108,9 +182,14 @@ void startup(){
 
   //NTP
   println("Starting NTP");
-  timeClient.setPoolServerName("pool.ntp.org");
   timeClient.setTimeOffset(tzOffsetSeconds(settings::getInt(keys::dev::timezone)));
   timeClient.begin();
+
+  // Одна попытка на загрузке, дальше по таймеру. Неудача ничему не мешает:
+  // расписание таймеров всё равно ждёт isTimeSet().
+  NtpTimer.setTime(NTP_RETRY_MS);
+  NtpTimer.start();
+  ntpSync();
 
   portalStart();
 
