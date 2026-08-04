@@ -72,6 +72,46 @@ void test_tiny_buffers_are_safe(void) {
   TEST_ASSERT_EQUAL('X', zero[0]);  // буфер не тронут
 }
 
+// --- uniq_id --------------------------------------------------------------
+
+static const char* uniqueId(uint32_t chipId, const char* component) {
+  static char buf[32];
+  buildUniqueId(chipId, component, buf, sizeof(buf));
+  return buf;
+}
+
+// Раньше uniq_id был голым chip ID, то есть одинаковым у всех сущностей
+// одного чипа. Компонент в суффиксе разводит их заранее.
+void test_unique_id_carries_component(void) {
+  TEST_ASSERT_EQUAL_STRING("4d2197_switch", uniqueId(0x4d2197, "switch"));
+  TEST_ASSERT_EQUAL_STRING("48fc73_sensor", uniqueId(0x48fc73, "sensor"));
+}
+
+void test_unique_id_differs_between_entities_of_one_chip(void) {
+  char sw[32], sens[32];
+  buildUniqueId(0x4d2197, "switch", sw, sizeof(sw));
+  buildUniqueId(0x4d2197, "sensor", sens, sizeof(sens));
+  TEST_ASSERT_TRUE_MESSAGE(strcmp(sw, sens) != 0,
+                           "две сущности одного чипа получили один uniq_id");
+}
+
+// Chip ID выравнивается нулями: иначе идентификаторы двух железок выглядели
+// бы разной длины, а младшие чипы теряли бы ведущий ноль.
+void test_unique_id_pads_chip_id(void) {
+  TEST_ASSERT_EQUAL_STRING("000abc_switch", uniqueId(0xabc, "switch"));
+  TEST_ASSERT_EQUAL_STRING("ffffff_sensor", uniqueId(0xffffff, "sensor"));
+}
+
+void test_unique_id_is_safe_with_tiny_buffer(void) {
+  char buf[4];
+  buildUniqueId(0x4d2197, "switch", buf, sizeof(buf));
+  TEST_ASSERT_EQUAL_STRING("4d2", buf);
+
+  char zero[1] = {'X'};
+  buildUniqueId(0x4d2197, "switch", zero, 0);
+  TEST_ASSERT_EQUAL('X', zero[0]);  // буфер не тронут
+}
+
 int main(int argc, char** argv) {
   UNITY_BEGIN();
   RUN_TEST(test_default_device_name);
@@ -82,5 +122,9 @@ int main(int argc, char** argv) {
   RUN_TEST(test_result_never_contains_forbidden_chars);
   RUN_TEST(test_does_not_overflow_small_buffer);
   RUN_TEST(test_tiny_buffers_are_safe);
+  RUN_TEST(test_unique_id_carries_component);
+  RUN_TEST(test_unique_id_differs_between_entities_of_one_chip);
+  RUN_TEST(test_unique_id_pads_chip_id);
+  RUN_TEST(test_unique_id_is_safe_with_tiny_buffer);
   return UNITY_END();
 }

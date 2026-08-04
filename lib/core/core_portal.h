@@ -160,7 +160,7 @@ void portalBuild(){
       GP.BLOCK_END();
 
       GP.BLOCK_TAB_BEGIN("MQTT Message periods");
-        GP.NUMBER("avaible_delay", "Avaible", settings::getInt(keys::mqtt::availableDelay)); GP.BREAK();
+        GP.NUMBER("available_delay", "Available", settings::getInt(keys::mqtt::availableDelay)); GP.BREAK();
         GP.NUMBER("status_delay", "Message", settings::getInt(keys::mqtt::statusDelay)); GP.BREAK();
       GP.BLOCK_END();
 
@@ -321,7 +321,7 @@ void portalCheckForm(){
       settings::setString(keys::mqtt::username, mqttUsername.c_str());
       if (mqttPassword.length() || !sameUser)
         settings::setString(keys::mqtt::password, mqttPassword.c_str());
-      settings::setInt(keys::mqtt::availableDelay, portal.getInt("avaible_delay"));
+      settings::setInt(keys::mqtt::availableDelay, portal.getInt("available_delay"));
       settings::setInt(keys::mqtt::statusDelay, portal.getInt("status_delay"));
       settings::setString(keys::mqtt::topicPrefix, portal.getString("topicPrefix").c_str());
 

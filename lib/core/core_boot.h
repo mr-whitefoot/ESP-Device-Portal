@@ -38,7 +38,7 @@ void ntpTick(){
 // и тогда же сюда добавляется ветка миграции. Добавление нового параметра
 // версию НЕ меняет: define сам подставит значение по умолчанию, не тронув
 // остальные -- ради этого свойства слой и заводился.
-static const int32_t SETTINGS_SCHEMA = 1;
+static const int32_t SETTINGS_SCHEMA = 2;
 
 
 void settingsMigrate(){
@@ -51,6 +51,27 @@ void settingsMigrate(){
     // их значит вечно носить около трёхсот байт мусора в файле базы.
     println("Settings schema 0: starting fresh");
     settings::clear();
+  }
+
+  if(schema == 1){
+    // 3.6.0. Сброса не требуется -- ни один параметр не сменил ни имени, ни
+    // смысла. Меняется то, что устройство рассказывает о себе брокеру, и
+    // прежнюю сущность в HomeAssistant надо снять до объявления новой:
+    // разбор в mqttRetirePreviousEntity().
+    //
+    // Свежему устройству это не нужно, поэтому ветка отдельная от нулевой:
+    // снимать там нечего, а лишний пустой config означал бы три секунды
+    // задержки автообнаружения на ровном месте.
+    println("Settings schema 1 -> 2: entity will be re-announced");
+    settings::defineBool(keys::mqtt::rediscover, false);
+    settings::setBool(keys::mqtt::rediscover, true);
+
+    // Периодическое available раз в минуту -- наследие времён до завещания:
+    // доступность публикуется retained, а об уходе устройства брокер
+    // рассказывает сам. Поднимаем только нетронутое значение по умолчанию:
+    // свой период пользователь ставил осознанно, и перебивать его нельзя.
+    if(settings::getInt(keys::mqtt::availableDelay) == 60)
+      settings::setInt(keys::mqtt::availableDelay, 300);
   }
 
   settings::setInt(keys::sys::schema, SETTINGS_SCHEMA);
@@ -80,7 +101,12 @@ void settingsSetup(){
   settings::defineString(keys::mqtt::prevName, "");
   settings::defineInt(keys::mqtt::port, 1883);
   settings::defineInt(keys::mqtt::statusDelay, 10);
-  settings::defineInt(keys::mqtt::availableDelay, 60);
+  // Пять минут, а не минута: доступность публикуется retained и подкреплена
+  // завещанием, так что периодическое сообщение здесь -- страховка, а не
+  // основной механизм.
+  settings::defineInt(keys::mqtt::availableDelay, 300);
+  // Пусто -- значит объявляться заново незачем, сущность уже актуальна.
+  settings::defineBool(keys::mqtt::rediscover, false);
 
   device::defineSettings();
 

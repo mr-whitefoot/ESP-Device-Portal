@@ -39,6 +39,11 @@ namespace mqtt {
 // завещанию кладёт в старый avaible "offline", возвращая только что убранное.
 // Пустое значение означает "нечего снимать".
 constexpr settings::Key prevName{"mqtt.prevName"};
+// Сущность в HomeAssistant нужно завести заново: uniq_id и object_id сменились
+// в 3.6.0, а на живую сущность HA их не переносит. Живёт в настройках, чтобы
+// пережить перезагрузку и недоступный в момент обновления брокер: уборка и
+// объявление произойдут при первом же удачном подключении.
+constexpr settings::Key rediscover{"mqtt.rediscover"};
 constexpr settings::Key host{"mqtt.host"};
 constexpr settings::Key port{"mqtt.port"};
 constexpr settings::Key username{"mqtt.username"};

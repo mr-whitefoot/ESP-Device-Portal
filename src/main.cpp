@@ -46,7 +46,7 @@ struct Form{
 
 
 Form form;
-TimerMs MessageTimer, ServiceMessageTimer, CleanupTimer;
+TimerMs MessageTimer, ServiceMessageTimer, CleanupTimer, RediscoverTimer;
 EspMQTTClient mqttClient;
 
 void publishState();

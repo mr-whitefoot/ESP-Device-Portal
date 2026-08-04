@@ -6,15 +6,21 @@ struct MQTTConnection {
   String clientName;
   String topicPrefix;
   uint32_t status_delay;
-  uint32_t avaible_delay;
+  uint32_t available_delay;
 };
 
 struct MQTTTopic{
   String discovery;
   String command;
-  String avaible;
+  String available;
   String state;
 };
+
+// Лист топика доступности до 3.6.0. Опечатка жила в именах топиков с самого
+// начала, и исправление ломает совместимость -- но ломает мягко: HA берёт
+// адрес из avty_t в discovery, то есть переезжает сам. У брокера остаётся
+// только сохранённое сообщение по старому адресу, и его надо снять.
+static const char* LEGACY_AVAILABLE_LEAF = "avaible";
 
 struct MQTTData{
   MQTTConnection connection;
@@ -41,7 +47,7 @@ void mqttReadConfig() {
   mqttData.connection.clientName = settings::getStringValue(keys::dev::name);
   mqttData.connection.topicPrefix = settings::getStringValue(keys::mqtt::topicPrefix);
   mqttData.connection.status_delay = settings::getInt(keys::mqtt::statusDelay);
-  mqttData.connection.avaible_delay = settings::getInt(keys::mqtt::availableDelay);
+  mqttData.connection.available_delay = settings::getInt(keys::mqtt::availableDelay);
 }
 
 
@@ -68,13 +74,13 @@ void topicCreate(){
   const String& deviceName = mqttData.connection.clientName;
 
   mqttData.topic.discovery = topicFor(deviceName, "config");
-  mqttData.topic.avaible = topicFor(deviceName, "avaible");
+  mqttData.topic.available = topicFor(deviceName, "available");
   mqttData.topic.state = topicFor(deviceName, "state");
   mqttData.topic.command = topicFor(deviceName, "set");
 
   #ifdef DEBUG_MQTT
     println("MQTT discovery topic: "+ mqttData.topic.discovery );
-    println("MQTT avaible topic: "+ mqttData.topic.avaible );
+    println("MQTT available topic: "+ mqttData.topic.available );
     println("MQTT state topic: "+ mqttData.topic.state );
     println("MQTT command topic: "+ mqttData.topic.command );
   #endif  
@@ -118,8 +124,8 @@ const String& getCommandTopic(){
 }
 
 
-const String& getAvaibleTopic(){
-  return mqttData.topic.avaible;
+const String& getAvailableTopic(){
+  return mqttData.topic.available;
 }
 
 
@@ -153,17 +159,17 @@ void mqttStart(){
   mqttClient.setMaxPacketSize(2048);
 
   // Завещание брокеру. Без него пропавшее устройство навсегда остаётся
-  // online в HomeAssistant: периодический avaible просто перестаёт приходить,
-  // а сказать об этом некому.
+  // online в HomeAssistant: периодическое available просто перестаёт
+  // приходить, а сказать об этом некому.
   // Указатель сохраняется как есть, поэтому строка обязана пережить клиента:
   // берём буфер глобального mqttData, заполненный в topicCreate() выше.
-  mqttClient.enableLastWillMessage(mqttData.topic.avaible.c_str(), "offline", true);
+  mqttClient.enableLastWillMessage(mqttData.topic.available.c_str(), "offline", true);
 
   // MQTT timers
   println("Starting MQTT timers");
   MessageTimer.setTime(mqttData.connection.status_delay * 1000);
   MessageTimer.start();
-  ServiceMessageTimer.setTime(mqttData.connection.avaible_delay * 1000);
+  ServiceMessageTimer.setTime(mqttData.connection.available_delay * 1000);
   ServiceMessageTimer.start();
 }
 
@@ -179,7 +185,13 @@ void mqttClearRetainedFor(const String& deviceName){
   println("MQTT clearing retained topics for " + deviceName);
   mqttClient.publish(topicFor(deviceName, "config"), "", true);
   mqttClient.publish(topicFor(deviceName, "state"), "", true);
-  mqttClient.publish(topicFor(deviceName, "avaible"), "", true);
+  mqttClient.publish(topicFor(deviceName, "available"), "", true);
+  // Топик с прежней опечаткой снимается и здесь. Устройство, которое
+  // переименовали ДО обновления, хранит старое имя в prevName, и уборка за
+  // ним доедет уже с новыми листьями -- сообщение по адресу с опечаткой
+  // осталось бы у брокера навсегда, снять его вручную можно только через
+  // сам брокер.
+  mqttClient.publish(topicFor(deviceName, LEGACY_AVAILABLE_LEAF), "", true);
   mqttClient.loop();
 }
 
@@ -218,22 +230,78 @@ void mqttClearPreviousName(){
 }
 
 
-void onConnectionEstablished() {
-  println("MQTT server is connected");
+// Полное объявление себя брокеру: сущность, состояние, доступность.
+//
+// Состояние идёт сразу за автообнаружением, не дожидаясь таймера: иначе HA
+// получает сущность и держит её unknown до ближайшего периодического
+// сообщения -- десять секунд карточки, которая не знает, включено ли реле.
+void mqttAnnounce(){
   SendDiscoveryMessage();
-  // Состояние сразу за автообнаружением, не дожидаясь таймера: иначе HA
-  // получает сущность и держит её unknown до ближайшего периодического
-  // сообщения -- десять секунд карточки, которая не знает, включено ли реле.
   publishState();
   SendAvailableMessage("online");
+}
 
-  // Уборка за переименованием откладывается, а не делается здесь. Брокер
-  // объявляет прежнюю сессию мёртвой не сразу, а по истечении keep-alive с
-  // половиной сверху (15 с у PubSubClient, то есть около 22 с), и только
-  // тогда публикует завещание в старый avaible. Уберись мы прямо сейчас --
-  // завещание пришло бы следом и вернуло мусор. Проверено на железе: ровно
-  // так и происходило.
-  if (settings::getStringValue(keys::mqtt::prevName).length()){
+
+// Снять прежнюю сущность перед тем, как объявить новую. Одноразовое действие
+// при обновлении со схемы 1.
+//
+// В 3.6.0 сменились uniq_id и object_id, а HomeAssistant не переносит их на
+// уже заведённую сущность: прежняя осталась бы висеть недоступной, а новая
+// получила бы entity_id с суффиксом _2. Пустой config убирает сущность из
+// реестра, и место освобождается.
+//
+// Топик доступности с опечаткой снимается НЕ здесь, а в отложенной уборке:
+// перезагрузка на обновлении рвёт прежнюю сессию, и брокер кладёт по этому
+// адресу завещание -- но не сразу, а через keep-alive с половиной сверху.
+// Уберись мы сейчас, завещание вернуло бы мусор следом.
+void mqttRetirePreviousEntity(){
+  println("MQTT schema upgrade: retiring previous entity");
+  mqttClient.publish(getDiscoveryTopic(), "", true);
+  mqttClient.loop();
+}
+
+
+// Снять сообщение по топику доступности с прежней опечаткой. Зовётся из
+// отложенной уборки, когда завещание прежней сессии давно отработало.
+void mqttClearLegacyAvailable(){
+  if (!settings::getBool(keys::mqtt::rediscover)) return;
+
+  println("MQTT clearing legacy availability topic");
+  mqttClient.publish(topicFor(mqttData.connection.clientName, LEGACY_AVAILABLE_LEAF),
+                     "", true);
+  mqttClient.loop();
+
+  settings::setBool(keys::mqtt::rediscover, false);
+  settings::commit();
+}
+
+
+void onConnectionEstablished() {
+  println("MQTT server is connected");
+
+  // Объявиться заново можно только после того, как HA переварит удаление,
+  // поэтому на обновлении discovery откладывается. Дальше объявление идёт
+  // как обычно -- сразу.
+  if (settings::getBool(keys::mqtt::rediscover)){
+    mqttRetirePreviousEntity();
+    RediscoverTimer.setTimerMode();
+    RediscoverTimer.setTime(3000);
+    RediscoverTimer.start();
+  } else {
+    mqttAnnounce();
+  }
+
+  // Уборка откладывается, а не делается здесь. Брокер объявляет прежнюю
+  // сессию мёртвой не сразу, а по истечении keep-alive с половиной сверху
+  // (15 с у PubSubClient, то есть около 22 с), и только тогда публикует
+  // завещание в топик доступности прежней прошивки. Уберись мы прямо
+  // сейчас -- завещание пришло бы следом и вернуло мусор. Проверено на
+  // железе: ровно так и происходило.
+  //
+  // Поводов два, и оба ждут одного и того же: топики прежнего имени после
+  // переименования и топик доступности с прежней опечаткой после обновления.
+  if (settings::getStringValue(keys::mqtt::prevName).length() ||
+      settings::getBool(keys::mqtt::rediscover)){
     CleanupTimer.setTimerMode();
     CleanupTimer.setTime(30000);
     CleanupTimer.start();
@@ -280,14 +348,26 @@ void SendDiscoveryMessage( ){
   JsonDocument doc;
 
   String device_name = mqttData.connection.clientName;
-  uint32_t chipId = ESP.getChipId();
+
+  // uniq_id -- на сущность, а не на устройство: раньше здесь было голое
+  // число chipId, общее для всего, что живёт на этом чипе. Разбор в
+  // buildUniqueId().
+  char uniqueId[40];
+  buildUniqueId(ESP.getChipId(), device::haComponent(), uniqueId, sizeof(uniqueId));
 
   doc["name"]         = device_name;
-  doc["uniq_id"]      = chipId;
-  doc["object_id"]    = "ESP_"+mqttData.topicName+"_"+WiFi.macAddress();
-  doc["ip"]           = WiFi.localIP().toString();
-  doc["mac"]          = WiFi.macAddress();
-  doc["avty_t"]       = getAvaibleTopic();
+  doc["uniq_id"]      = uniqueId;
+  // object_id -- это подсказка HomeAssistant, каким сделать entity_id.
+  // Раньше сюда уходило "ESP_" плюс имя плюс MAC с двоеточиями, и получалось
+  // switch.esp_esp_relay_dc_4f_22_4d_21_97: нечитаемо, с удвоенным esp_esp
+  // и MAC внутри -- ровно обратное тому, зачем object_id существует.
+  // Санированное имя устройства даёт switch.esp_relay.
+  doc["object_id"]    = mqttData.topicName;
+  // ip и mac на верхнем уровне убраны: в схеме HomeAssistant таких ключей
+  // нет, discovery-схемы объявлены с extra=vol.REMOVE_EXTRA и молча их
+  // выбрасывали. Адрес и так уходит в device.configuration_url, MAC --
+  // в device.identifiers.
+  doc["avty_t"]       = getAvailableTopic();
   doc["pl_avail"]     = "online";
   doc["pl_not_avail"] = "offline";
   // Явные строки вместо булевых значений. Раньше здесь лежали JSON true/false,
@@ -329,7 +409,7 @@ void SendAvailableMessage(const String &mode = "online"){
   #endif
   // retain=true, иначе после перезапуска HomeAssistant сущность висит
   // unavailable до следующего периодического сообщения.
-  mqttClient.publish(getAvaibleTopic(), mode, true);
+  mqttClient.publish(getAvailableTopic(), mode, true);
 }
 
 
@@ -344,9 +424,16 @@ void mqttPublish() {
     SendAvailableMessage();
   }
 
-  // Одноразовый: запускается только после переименования, снимает топики
-  // прежнего имени и больше не взводится.
+  // Одноразовый: отложенная уборка за переименованием и за обновлением схемы.
+  // Оба флага гасятся только здесь, поэтому обновление, оборвавшееся на
+  // середине, доделается при следующем подключении.
   if (mqttClient.isConnected() && CleanupTimer.tick()) {
     mqttClearPreviousName();
+    mqttClearLegacyAvailable();
+  }
+
+  // Тоже одноразовый: объявление новой сущности после снятия прежней.
+  if (mqttClient.isConnected() && RediscoverTimer.tick()) {
+    mqttAnnounce();
   }
 }

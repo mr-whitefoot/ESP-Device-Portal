@@ -1,5 +1,7 @@
 #pragma once
 #include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
 
 // HomeAssistant разбирает discovery-топик регуляркой, в которой node_id и
 // object_id допускают только [a-zA-Z0-9_-]. Имя устройства подставлялось в
@@ -40,4 +42,22 @@ inline void sanitizeTopicSegment(const char* src, char* dst, size_t dstSize) {
   }
 
   dst[n] = '\0';
+}
+
+// uniq_id для HomeAssistant.
+//
+// Раньше здесь лежало голое число chip ID. HA приводил его к строке, и всё
+// работало -- но уникальность требуется на СУЩНОСТЬ, а не на устройство.
+// Появись на одном чипе вторая сущность (реле и датчик в одной прошивке),
+// они столкнулись бы, и разбираться пришлось бы уже с настроенным HA.
+// Компонент в суффиксе снимает вопрос заранее.
+//
+// Chip ID печатается шестью цифрами с нулями: у ESP8266 он 24-битный, и
+// без выравнивания идентификаторы двух железок выглядели бы разной длины.
+inline void buildUniqueId(uint32_t chipId, const char* component,
+                          char* dst, size_t dstSize) {
+  if (dst == nullptr || dstSize == 0) return;
+  if (component == nullptr) component = "";
+
+  snprintf(dst, dstSize, "%06x_%s", (unsigned)chipId, component);
 }
