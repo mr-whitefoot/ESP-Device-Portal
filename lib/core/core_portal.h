@@ -82,6 +82,54 @@ void portalBuild(){
         GP.BOX_END();
       GP.BLOCK_END();
 
+      // Учётные данные показываются только при включённой авторизации.
+      // Пароль, как и остальные секреты портала, в HTML не возвращаем:
+      // пустое поле при сохранении оставляет прежнее значение.
+      {
+        bool authEnabled = settings::getBool(keys::portal::authEnabled);
+        bool passwordSaved = settings::getStringValue(keys::portal::password).length();
+
+        GP.BLOCK_TAB_BEGIN("Авторизация");
+          GP.BOX_BEGIN(GP_EDGES);
+            GP.LABEL("Авторизация");
+            GP.CHECK("authEnabled", authEnabled);
+          GP.BOX_END();
+
+          if (authEnabled)
+            GP.SEND(F("<div id='authCredentials'>\n"));
+          else
+            GP.SEND(F("<div id='authCredentials' style='display:none'>\n"));
+          GP.TEXT("authUsername", "Username", settings::getStringValue(keys::portal::username)); GP.BREAK();
+          GP.PASS("authPassword", passwordPlaceholder(passwordSaved), ""); GP.BREAK();
+          GP.SEND(F("</div>\n"));
+        GP.BLOCK_END();
+
+        // required не ставится навсегда: сохранённый пароль можно оставить,
+        // отправив пустое поле, а при выключенном чекбоксе скрытые поля не
+        // должны мешать сохранению остальных настроек.
+        GP.JS_BEGIN();
+        GP.SEND(F(
+          "const authEnabled=document.getElementById('authEnabled');"
+          "const authCredentials=document.getElementById('authCredentials');"
+          "const authUsername=document.getElementById('authUsername');"
+          "const authPassword=document.getElementById('authPassword');"
+          "function toggleAuthCredentials(){"
+            "const enabled=authEnabled.checked;"
+            "authCredentials.style.display=enabled?'block':'none';"
+            "authUsername.required=enabled;"
+            "authPassword.required=enabled&&(authPassword.dataset.saved!='1'||"
+              "authUsername.value!==authUsername.defaultValue);"
+          "}"
+          "authPassword.dataset.saved='"));
+        GP.SEND(passwordSaved ? F("1") : F("0"));
+        GP.SEND(F(
+          "';"
+          "authEnabled.addEventListener('change',toggleAuthCredentials);"
+          "authUsername.addEventListener('input',toggleAuthCredentials);"
+          "toggleAuthCredentials();"));
+        GP.JS_END();
+      }
+
 
       GP.BLOCK_TAB_BEGIN("Information");
         GP.BOX_BEGIN(GP_EDGES);
@@ -300,9 +348,37 @@ void portalCheckForm(){
       settings::setInt(keys::dev::timezone, timezone);
       corentp::setOffsetFromSettings(tzOffsetSeconds(timezone));
 
+      bool prevAuthEnabled = settings::getBool(keys::portal::authEnabled);
+      String prevAuthUsername = settings::getStringValue(keys::portal::username);
+      String prevAuthPassword = settings::getStringValue(keys::portal::password);
+      bool requestedAuth = portal.getCheck("authEnabled");
+      String authUsername = portal.getString("authUsername");
+      String authPassword = portal.getString("authPassword");
+      bool sameAuthUser = authUsername == prevAuthUsername;
+
+      // Пустой пароль сохраняет прежний только для того же логина. При смене
+      // логина пустое поле действительно очищает пароль -- иначе новый
+      // пользователь незаметно получил бы секрет прежнего.
+      settings::setString(keys::portal::username, authUsername.c_str());
+      if (authPassword.length() || !sameAuthUser)
+        settings::setString(keys::portal::password, authPassword.c_str());
+
+      bool hasAuthPassword = authPassword.length() ||
+                             (sameAuthUser && prevAuthPassword.length());
+      bool authEnabled = requestedAuth && authUsername.length() && hasAuthPassword;
+      settings::setBool(keys::portal::authEnabled, authEnabled);
+      if (requestedAuth && !authEnabled)
+        println("Portal authorization needs username and password");
+
+      bool authChanged = authEnabled != prevAuthEnabled ||
+                         authUsername != prevAuthUsername ||
+                         authPassword.length();
+
       settings::commit();
 
-      if (nameChanged) restartRequest();
+      // GyverPortal хранит указатели на учётные данные, поэтому смена режима
+      // или credentials применяется после безопасной отложенной перезагрузки.
+      if (nameChanged || authChanged) restartRequest();
 
       //MQTT Config
     } else if(portal.form(form.mqttConfig)){

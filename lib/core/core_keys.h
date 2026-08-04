@@ -24,6 +24,12 @@ constexpr settings::Key name{"dev.name"};
 constexpr settings::Key timezone{"dev.timezone"};
 }  // namespace dev
 
+namespace portal {
+constexpr settings::Key authEnabled{"portal.authEnabled"};
+constexpr settings::Key username{"portal.username"};
+constexpr settings::Key password{"portal.password"};
+}  // namespace portal
+
 namespace wifi {
 constexpr settings::Key ssid{"wifiSsid"};
 constexpr settings::Key password{"wifiPassword"};

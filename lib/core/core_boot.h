@@ -4,6 +4,12 @@
 // и у restartRequest() ниже.
 RestartRequest restartPending;
 
+// GyverPortal запоминает переданные в enableAuth() const char*, поэтому строки
+// должны жить всё время работы портала, а не быть временными результатами
+// settings::getStringValue().
+String portalAuthUsername;
+String portalAuthPassword;
+
 
 void println(const String& text){
   Serial.println(text);
@@ -20,14 +26,30 @@ void print(const String& text){
 void portalStart(){
   println("Starting portal");
   portal.attachBuild(portalBuild);
-  portal.disableAuth();
+
+  portalAuthUsername = settings::getStringValue(keys::portal::username);
+  portalAuthPassword = settings::getStringValue(keys::portal::password);
+  bool portalAuthEnabled = settings::getBool(keys::portal::authEnabled) &&
+                           portalAuthUsername.length() &&
+                           portalAuthPassword.length();
+  if (portalAuthEnabled) {
+    portal.enableAuth(portalAuthUsername.c_str(), portalAuthPassword.c_str());
+  } else {
+    portal.disableAuth();
+  }
   portal.attach(portalAction);
   portal.OTA.attachUpdateBuild(OTAbuild);
   // Имя берётся из corewifi: portal.start() запоминает сырой указатель, и
   // строка обязана пережить вызов. Временный String из getStringValue умирал
   // в конце выражения.
   portal.start(corewifi::portalName.c_str());
-  portal.enableOTA();
+  // CustomOTA регистрирует отдельные обработчики, поэтому credentials нужно
+  // передать прямо в enableOTA(). Вызов без аргументов очистил бы их и оставил
+  // /ota_update открытым при закрытом основном портале.
+  if (portalAuthEnabled)
+    portal.enableOTA(portalAuthUsername, portalAuthPassword);
+  else
+    portal.enableOTA();
   corewifi::portalStarted();
 }
 
@@ -102,6 +124,12 @@ void settingsSetup(){
   // значение по умолчанию, а остальные переживут обновление.
   settings::defineString(keys::dev::name, (String("ESP ") + device::model()).c_str());
   settings::defineInt(keys::dev::timezone, TIMEZONE_UTC);
+
+  // После обновления портал остаётся открытым, пока владелец сам не задаст
+  // учётные данные и не включит авторизацию в Preferences.
+  settings::defineBool(keys::portal::authEnabled, false);
+  settings::defineString(keys::portal::username, "");
+  settings::defineString(keys::portal::password, "");
 
   settings::defineString(keys::mqtt::topicPrefix, "homeassistant");
   // Пусто -- значит за переименованием убирать нечего.
