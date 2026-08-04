@@ -11,6 +11,16 @@ String timezoneOptions(){
 }
 
 
+// Сохранённый пароль в форму не подставляется. GP.PASS рисует
+// <input type='password'>, но значение кладёт в атрибут value как есть:
+// маскировка работает только для глаз, а `curl` страницы отдаёт пароль
+// открытым текстом кому угодно в сети. Поэтому поле всегда пустое, а то,
+// что пароль всё-таки сохранён, видно по подсказке внутри поля.
+const char* passwordPlaceholder(bool saved){
+  return saved ? "Saved, empty keeps it" : "Password";
+}
+
+
 void portalBuild(){
   uint32_t retryLeft = corewifi::retryLeftSeconds();
 
@@ -121,7 +131,7 @@ void portalBuild(){
 
         GP.BLOCK_TAB_BEGIN("Settings");
           GP.TEXT("ssid", "SSID", settings::getStringValue(keys::wifi::ssid));GP.BREAK();
-          GP.PASS("pass", "Password", settings::getStringValue(keys::wifi::password));GP.BREAK();
+          GP.PASS("pass", passwordPlaceholder(settings::getStringValue(keys::wifi::password).length()), "");GP.BREAK();
         GP.BLOCK_END();
 
         GP.HR();
@@ -146,7 +156,7 @@ void portalBuild(){
         GP.TEXT("mqttServerIp", "Server", settings::getStringValue(keys::mqtt::host)); GP.BREAK();
         GP.NUMBER("mqttServerPort", "Port", settings::getInt(keys::mqtt::port)); GP.BREAK();
         GP.TEXT("mqttUsername", "Username", settings::getStringValue(keys::mqtt::username)); GP.BREAK();
-        GP.PASS("mqttPassword", "Password", settings::getStringValue(keys::mqtt::password)); GP.BREAK();
+        GP.PASS("mqttPassword", passwordPlaceholder(settings::getStringValue(keys::mqtt::password).length()), ""); GP.BREAK();
       GP.BLOCK_END();
 
       GP.BLOCK_TAB_BEGIN("MQTT Message periods");
@@ -244,8 +254,18 @@ void portalCheckForm(){
   if (portal.form()) {
     //WiFi config
     if (portal.form(form.WiFiConfig)) {
-      settings::setString(keys::wifi::ssid, portal.getString("ssid").c_str());
-      settings::setString(keys::wifi::password, portal.getString("pass").c_str());
+      // Пустое поле пароля означает «оставить прежний»: в форму сохранённый
+      // пароль не подставляется, и иначе любое сохранение страницы затирало бы
+      // его пустой строкой. Но у WiFi пустой пароль -- законное значение для
+      // открытой сети, поэтому послабление действует только пока SSID тот же.
+      // Указали другую сеть и оставили поле пустым -- значит, она открытая.
+      String ssid = portal.getString("ssid");
+      String pass = portal.getString("pass");
+      bool sameNetwork = ssid == settings::getStringValue(keys::wifi::ssid);
+
+      settings::setString(keys::wifi::ssid, ssid.c_str());
+      if (pass.length() || !sameNetwork)
+        settings::setString(keys::wifi::password, pass.c_str());
       settings::commit();
       // Без перезагрузки: автомат сам попробует новые креды, а если они
       // не подойдут -- вернёт точку доступа.
@@ -288,8 +308,19 @@ void portalCheckForm(){
     } else if(portal.form(form.mqttConfig)){
       settings::setString(keys::mqtt::host, portal.getString("mqttServerIp").c_str());
       settings::setInt(keys::mqtt::port, portal.getInt("mqttServerPort"));
-      settings::setString(keys::mqtt::username, portal.getString("mqttUsername").c_str());
-      settings::setString(keys::mqtt::password, portal.getString("mqttPassword").c_str());
+      // Пустое поле -- «оставить прежний пароль», как и у WiFi выше, и по тому
+      // же правилу: пароль привязан к логину. Оставили логин прежним -- пустое
+      // поле ничего не меняет; сменили логин (в том числе стёрли его, переезжая
+      // на брокер без авторизации) -- пустое поле означает пустой пароль.
+      // Адрес брокера в это правило не входит: сменить IP того же брокера --
+      // дело обычное, и терять на этом пароль было бы неприятно.
+      String mqttUsername = portal.getString("mqttUsername");
+      String mqttPassword = portal.getString("mqttPassword");
+      bool sameUser = mqttUsername == settings::getStringValue(keys::mqtt::username);
+
+      settings::setString(keys::mqtt::username, mqttUsername.c_str());
+      if (mqttPassword.length() || !sameUser)
+        settings::setString(keys::mqtt::password, mqttPassword.c_str());
       settings::setInt(keys::mqtt::availableDelay, portal.getInt("avaible_delay"));
       settings::setInt(keys::mqtt::statusDelay, portal.getInt("status_delay"));
       settings::setString(keys::mqtt::topicPrefix, portal.getString("topicPrefix").c_str());
