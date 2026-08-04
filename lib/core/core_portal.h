@@ -302,7 +302,7 @@ void portalCheckForm(){
 
       settings::commit();
 
-      if (nameChanged) restart();
+      if (nameChanged) restartRequest();
 
       //MQTT Config
     } else if(portal.form(form.mqttConfig)){
@@ -325,7 +325,7 @@ void portalCheckForm(){
       settings::setInt(keys::mqtt::statusDelay, portal.getInt("status_delay"));
       settings::setString(keys::mqtt::topicPrefix, portal.getString("topicPrefix").c_str());
 
-      restart();
+      restartRequest();
 
     } else {
       device::handleForm();
@@ -364,7 +364,12 @@ void portalAction(){
     println("Portal click: " + portal.clickName());
 
     device::handleClick();
-    if (portal.click("rebootButton")){ restart(); }
+    // Через заказ, хотя именно здесь можно было и напрямую: клику GyverPortal
+    // отвечает server.send(200) ДО вызова _action() (portal.h:122), в отличие
+    // от формы, чей ответ собирается после (portal.h:223). То есть кнопка
+    // Reboot и не висла. Но единственная дорога к перезагрузке надёжнее двух:
+    // разница между этими путями видна только в исходниках библиотеки.
+    if (portal.click("rebootButton")){ restartRequest(); }
   }
 }
 

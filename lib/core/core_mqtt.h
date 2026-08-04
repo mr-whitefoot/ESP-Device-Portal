@@ -416,6 +416,12 @@ void SendAvailableMessage(const String &mode = "online"){
 
 
 void mqttPublish() {
+  // Перезагрузка заказана и вот-вот случится -- публиковать нечего и незачем.
+  // Это не оптимизация: factory reset снимает retained-топики и только потом
+  // отдаёт ответ на форму, а очередное периодическое сообщение, попавшее в
+  // это окно, вернуло бы брокеру снятое.
+  if (restartPending.pending()) return;
+
   if (mqttClient.isConnected() && MessageTimer.tick()) {
     publishState();
   }

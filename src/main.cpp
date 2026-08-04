@@ -57,6 +57,7 @@ void mqttClearRetained();
 void factoryReset();
 void mqttStart();
 void restart();
+void restartRequest();
 void println(const String& text);
 void print(const String& text);
 
@@ -100,5 +101,9 @@ void loop(){
   STAGE(ST_WIFI,     corewifi::tick());
   STAGE(ST_NTP,      ntpTick());
   STAGE(ST_DEVICE,   device::tick());
+  // Последней: отложенная перезагрузка обязана случиться после того, как
+  // portal.tick() отдал ответ на форму. Отдельного этапа метрик у неё нет --
+  // это сравнение двух чисел, а когда оно срабатывает, мерить уже некому.
+  restartTick();
   LOOP_METRICS_END();
 }

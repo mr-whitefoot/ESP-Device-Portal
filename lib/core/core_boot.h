@@ -1,3 +1,10 @@
+#include <restart_request.h>
+
+// Заказанная, но ещё не наступившая перезагрузка. Разбор -- в restart_request.h
+// и у restartRequest() ниже.
+RestartRequest restartPending;
+
+
 void println(const String& text){
   Serial.println(text);
   glog.println(text);
@@ -169,7 +176,27 @@ void factoryReset(){
   // не оживёт.
   mqttClearRetained();
   settings::clear();
-  restart();
+  // Тоже через заказ: сброс приходит из обработчика формы. Пока перезагрузка
+  // ждёт своего срока, публикации в MQTT остановлены -- иначе очередное
+  // периодическое сообщение вернуло бы брокеру только что снятый топик.
+  restartRequest();
+}
+
+
+// Заказать перезагрузку. Зовётся из обработчиков формы и клика, а те работают
+// ДО отправки ответа (portal.h:221), поэтому перезагружаться прямо здесь
+// нельзя: ответ уйти не успеет и страница повиснет. Разбор в
+// restart_request.h.
+void restartRequest(){
+  println("Reboot requested");
+  restartPending.request(millis());
+}
+
+
+// Наступил ли срок. Зовётся из loop(), то есть заведомо после того, как
+// portal.tick() отдал ответ браузеру.
+void restartTick(){
+  if (restartPending.tick(millis())) restart();
 }
 
 
