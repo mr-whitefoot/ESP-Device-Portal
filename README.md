@@ -155,7 +155,7 @@ configuration и смена имени устройства в Preferences, — 
 
 
 ### Обновление прошивки через портал:
-- Скачать [стабильную прошивку 3.6.5](https://github.com/mr-whitefoot/ESP-Device-Portal/releases/latest) либо собрать самостоятельно, см. ниже. Файлы называются `ESP_Relay_v3.6.5.bin` и `ESP_DS18B20_v3.6.5.bin`;
+- Скачать [стабильную прошивку 3.7.1](https://github.com/mr-whitefoot/ESP-Device-Portal/releases/latest) либо собрать самостоятельно, см. ниже. Файлы называются `ESP_Relay_v3.7.1.bin` и `ESP_DS18B20_v3.7.1.bin`;
 - Перейти на портале устройства Configuration -> Firmware upgrade;
 - Нажать кнопку OTA firmware;
 - Выбрать скачанный bin файл;
@@ -178,8 +178,8 @@ pio run -e esp01_ds18b20    # датчик температуры
 в `.pio/build/<окружение>/`:
 
 ```
-.pio/build/esp01_relay/ESP_Relay_v3.6.5.bin
-.pio/build/esp01_ds18b20/ESP_DS18B20_v3.6.5.bin
+.pio/build/esp01_relay/ESP_Relay_v3.7.1.bin
+.pio/build/esp01_ds18b20/ESP_DS18B20_v3.7.1.bin
 ```
 
 В конце сборки печатается строка вида
