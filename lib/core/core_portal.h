@@ -89,9 +89,9 @@ void portalBuild(){
         bool authEnabled = settings::getBool(keys::portal::authEnabled);
         bool passwordSaved = settings::getStringValue(keys::portal::password).length();
 
-        GP.BLOCK_TAB_BEGIN("Авторизация");
+        GP.BLOCK_TAB_BEGIN("Authorization");
           GP.BOX_BEGIN(GP_EDGES);
-            GP.LABEL("Авторизация");
+            GP.LABEL("Authorization");
             GP.CHECK("authEnabled", authEnabled);
           GP.BOX_END();
 
