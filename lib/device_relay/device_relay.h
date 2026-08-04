@@ -30,9 +30,12 @@ Timers timers;
 const char* pageTimers = "/timers";
 
 void timersLoad() {
+  bool buttonMode = settings::getBool(keys::relay::buttonMode);
   for (uint8_t i = 0; i < TIMER_COUNT; i++) {
     timers.timer[i].enable = settings::getBool(keys::timer::enable[i]);
-    timers.timer[i].action = (uint8_t)settings::getInt(keys::timer::action[i]);
+    timers.timer[i].action = buttonMode
+        ? TIMER_ACTION_ON
+        : (uint8_t)settings::getInt(keys::timer::action[i]);
     timers.timer[i].hours = (uint8_t)settings::getInt(keys::timer::hours[i]);
     timers.timer[i].minutes = (uint8_t)settings::getInt(keys::timer::minutes[i]);
     timers.timer[i].seconds = (uint8_t)settings::getInt(keys::timer::seconds[i]);
@@ -94,7 +97,7 @@ void scheduleHandle() {
   }
 }
 
-void buildTimerUi(const int index) {
+void buildTimerUi(const int index, const bool buttonMode) {
   GP.BLOCK_TAB_BEGIN("Timer");
     GP.BOX_BEGIN(GP_EDGES);
       GP.LABEL("Timer"); GP.SWITCH("timerEnable"+String(index), timers.timer[index].enable);
@@ -102,24 +105,28 @@ void buildTimerUi(const int index) {
     GP.SELECT("timerHours"+String(index),"00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23", timers.timer[index].hours);
     GP.SELECT("timerMinutes"+String(index),"00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59",timers.timer[index].minutes);
     GP.SELECT("timerSeconds"+String(index),"00,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59",timers.timer[index].seconds);
-    GP.BOX_BEGIN(GP_EDGES);
-      GP.LABEL("Action"); GP.SELECT("timerAction"+String(index), "On,Off,Toggle", timers.timer[index].action);
-    GP.BOX_END();
+    if (!buttonMode) {
+      GP.BOX_BEGIN(GP_EDGES);
+        GP.LABEL("Action"); GP.SELECT("timerAction"+String(index), "On,Off,Toggle", timers.timer[index].action);
+      GP.BOX_END();
+    }
   GP.BLOCK_END();
 }
 
-void saveTimer(const int index) {
+void saveTimer(const int index, const bool buttonMode) {
   bool enable = false;
-  int action = 0, hours = 0, minutes = 0, seconds = 0;
+  int action = TIMER_ACTION_ON, hours = 0, minutes = 0, seconds = 0;
 
   portal.copyBool("timerEnable"+String(index), enable);
-  portal.copyInt("timerAction"+String(index), action);
+  if (!buttonMode) portal.copyInt("timerAction"+String(index), action);
   portal.copyInt("timerHours"+String(index), hours);
   portal.copyInt("timerMinutes"+String(index), minutes);
   portal.copyInt("timerSeconds"+String(index), seconds);
 
   settings::setBool(keys::timer::enable[index], enable);
-  settings::setInt(keys::timer::action[index], action);
+  // В Button mode поля в форме нет: действием в кэше служит ON, а сохранённый
+  // выбор оставляем для возможного возврата в обычный режим.
+  if (!buttonMode) settings::setInt(keys::timer::action[index], action);
   settings::setInt(keys::timer::hours[index], hours);
   settings::setInt(keys::timer::minutes[index], minutes);
   settings::setInt(keys::timer::seconds[index], seconds);
@@ -194,11 +201,13 @@ void buildHomeLinks() {
 bool buildPage(const String& uri) {
   if (uri != detail::pageTimers) return false;
 
+  bool buttonMode = settings::getBool(keys::relay::buttonMode);
   GP.FORM_BEGIN(detail::pageTimers);
     GP.PAGE_TITLE("Timers");
     GP.TITLE("Timers");
     GP.HR();
-    for (int i = 0; i < TIMER_COUNT; i++) detail::buildTimerUi(i);
+    for (int i = 0; i < TIMER_COUNT; i++)
+      detail::buildTimerUi(i, buttonMode);
     GP.HR();
     GP.SUBMIT("Save");
   GP.FORM_END();
@@ -259,6 +268,7 @@ void readSettingsForm() {
   // mode позднее выключат и перезагрузят устройство до новой команды.
   if (buttonMode) settings::setBool(keys::relay::state, false);
   detail::relay.SetButtonMode(buttonMode);
+  detail::timersLoad();
 
   // При Button mode поле скрыто и disabled, поэтому браузер его не отправит.
   // Прежнее значение сохраняем: после возврата в обычный режим пользователь
@@ -270,7 +280,9 @@ void readSettingsForm() {
 bool handleForm() {
   if (!portal.form(detail::pageTimers)) return false;
 
-  for (int i = 0; i < TIMER_COUNT; i++) detail::saveTimer(i);
+  bool buttonMode = settings::getBool(keys::relay::buttonMode);
+  for (int i = 0; i < TIMER_COUNT; i++)
+    detail::saveTimer(i, buttonMode);
   settings::commit();
   detail::timersLoad();  // обновить кэш расписания
   return true;
