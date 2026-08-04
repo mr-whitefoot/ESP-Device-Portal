@@ -117,7 +117,7 @@ configuration и смена имени устройства в Preferences, — 
 
 
 ### Обновление прошивки через портал:
-- Скачать [прошивку 3.6.2 из релизов](https://github.com/mr-whitefoot/ESP-Device-Portal/releases) либо собрать самостоятельно, см. ниже. Файлы называются `ESP_Relay_v3.6.2.bin` и `ESP_DS18B20_v3.6.2.bin`. Ссылка ведёт на список, а не на `releases/latest`: 3.6.2 опубликована как pre-release, а `latest` такие версии пропускает;
+- Скачать [стабильную прошивку 3.6.2](https://github.com/mr-whitefoot/ESP-Device-Portal/releases/latest) либо собрать самостоятельно, см. ниже. Файлы называются `ESP_Relay_v3.6.2.bin` и `ESP_DS18B20_v3.6.2.bin`;
 - Перейти на портале устройства Configuration -> Firmware upgrade;
 - Нажать кнопку OTA firmware;
 - Выбрать скачанный bin файл;
