@@ -101,7 +101,7 @@
 
 
 ### Обновление прошивки через портал:
-- Скачать [последнюю версию прошивки](https://github.com/mr-whitefoot/ESP-Device-Portal/releases/latest) либо собрать самостоятельно, см. ниже. В имени файла указаны устройство и версия: `ESP_Relay_v3.6.0.bin`, `ESP_DS18B20_v3.6.0.bin`;
+- Скачать [прошивку из релизов](https://github.com/mr-whitefoot/ESP-Device-Portal/releases) либо собрать самостоятельно, см. ниже. В имени файла указаны устройство и версия: `ESP_Relay_v3.6.0.bin`, `ESP_DS18B20_v3.6.0.bin`. Ссылка ведёт на список, а не на `releases/latest`: 3.6.0 помечена pre-release, а `latest` такие пропускает и отдал бы 2.6.1 от 2024 года;
 - Перейти на портале устройства Configuration -> Firmware upgrade;
 - Нажать кнопку OTA firmware;
 - Выбрать скачанный bin файл;
