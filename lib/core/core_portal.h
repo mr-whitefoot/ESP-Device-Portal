@@ -21,6 +21,175 @@ const char* passwordPlaceholder(bool saved){
 }
 
 
+// Tasmota на странице настройки WiFi показывает три самые сильные сети,
+// убирает повторяющиеся SSID и по клику переносит имя сети в форму. Здесь тот
+// же сценарий, но scan остаётся асинхронным: блокировать loop() на несколько
+// секунд особенно опасно для captive portal и OneWire на ESP8266.
+constexpr uint8_t WIFI_SCAN_PREVIEW_COUNT = 3;
+constexpr uint8_t WIFI_SCAN_RESULT_LIMIT = 16;
+
+String wifiScanEscapeHtml(const String& value){
+  String escaped;
+  escaped.reserve(value.length() + 8);
+  for(size_t i = 0; i < value.length(); i++){
+    switch(value[i]){
+      case '&':  escaped += F("&amp;");  break;
+      case '<':  escaped += F("&lt;");   break;
+      case '>':  escaped += F("&gt;");   break;
+      case '\"': escaped += F("&quot;"); break;
+      case '\'': escaped += F("&#39;");  break;
+      default:   escaped += value[i];     break;
+    }
+  }
+  return escaped;
+}
+
+uint8_t wifiScanQuality(int32_t rssi){
+  if(rssi <= -100) return 0;
+  if(rssi >= -50) return 100;
+  return static_cast<uint8_t>(2 * (rssi + 100));
+}
+
+// Возвращает индексы уникальных SSID от сильного к слабому. Для одинакового
+// имени оставляем лучший BSSID, как сокращённый список Tasmota. Жёсткий предел
+// нужен для ESP-01: число соседских точек не должно определять расход стека.
+uint8_t wifiScanSortedIndices(int16_t found, uint8_t* indices, uint8_t capacity){
+  uint8_t used = 0;
+  for(int16_t candidate = 0; candidate < found; candidate++){
+    String candidateSsid = WiFi.SSID(candidate);
+    if(!candidateSsid.length()) continue;
+
+    int8_t position = -1;
+    for(uint8_t i = 0; i < used; i++){
+      if(WiFi.SSID(indices[i]) == candidateSsid){
+        position = i;
+        break;
+      }
+    }
+
+    if(position >= 0){
+      if(WiFi.RSSI(candidate) <= WiFi.RSSI(indices[position])) continue;
+      indices[position] = candidate;
+    } else if(used < capacity){
+      position = used;
+      indices[used++] = candidate;
+    } else {
+      if(WiFi.RSSI(candidate) <= WiFi.RSSI(indices[used - 1])) continue;
+      position = used - 1;
+      indices[position] = candidate;
+    }
+
+    while(position > 0 &&
+          WiFi.RSSI(indices[position]) > WiFi.RSSI(indices[position - 1])){
+      uint8_t previous = indices[position - 1];
+      indices[position - 1] = indices[position];
+      indices[position] = previous;
+      position--;
+    }
+  }
+  return used;
+}
+
+int16_t wifiScanStatus(){
+  int16_t status = WiFi.scanComplete();
+
+  // scan=1 приходит только с явной ссылки «Scan again». Сначала освобождаем
+  // предыдущий результат SDK, иначе будет показан старый список.
+  if(portal.hasArg("scan")){
+    WiFi.scanDelete();
+    status = WiFi.scanNetworks(true);
+  } else if(status == WIFI_SCAN_FAILED){
+    // Первый заход после загрузки: список ещё не строился.
+    status = WiFi.scanNetworks(true);
+  }
+  return status;
+}
+
+void wifiScanReload(bool expanded){
+  GP.JS_BEGIN();
+  GP.SEND(F("setTimeout(function(){location.replace('"));
+  GP.SEND(form.WiFiConfig);
+  if(expanded) GP.SEND(F("?all=1"));
+  GP.SEND(F("');},900);"));
+  GP.JS_END();
+}
+
+void wifiScanBuild(){
+  bool expanded = portal.hasArg("all") || portal.hasArg("scan");
+  int16_t found = wifiScanStatus();
+
+  GP.BLOCK_TAB_BEGIN("Available networks");
+    if(found == WIFI_SCAN_RUNNING){
+      GP.LABEL("Scanning...");
+      wifiScanReload(expanded);
+    } else if(found == WIFI_SCAN_FAILED){
+      GP.LABEL("WiFi scan failed");
+    } else if(found == 0){
+      GP.LABEL("No networks found");
+    } else {
+      uint8_t indices[WIFI_SCAN_RESULT_LIMIT];
+      uint8_t unique = wifiScanSortedIndices(found, indices, WIFI_SCAN_RESULT_LIMIT);
+      uint8_t shown = expanded ? unique : min(unique, WIFI_SCAN_PREVIEW_COUNT);
+
+      GP.SEND(F(
+        "<style>"
+        ".wifi-net{display:flex;align-items:center;justify-content:space-between;"
+          "gap:8px;padding:8px 4px;text-decoration:none}"
+        ".wifi-name{overflow-wrap:anywhere;text-align:left}"
+        ".wifi-rssi{white-space:nowrap;font-size:.85em;opacity:.8}"
+        ".wifi-bars{display:inline-flex;align-items:flex-end;height:14px;margin-left:5px}"
+        ".wifi-bars i{display:block;width:3px;margin-left:1px;border-radius:2px;"
+          "background:currentColor;opacity:.25}"
+        ".wifi-bars i.on{opacity:1}"
+        ".wifi-bars i:nth-child(1){height:25%}"
+        ".wifi-bars i:nth-child(2){height:50%}"
+        ".wifi-bars i:nth-child(3){height:75%}"
+        ".wifi-bars i:nth-child(4){height:100%}"
+        "</style>"));
+
+      for(uint8_t i = 0; i < shown; i++){
+        uint8_t index = indices[i];
+        int32_t rssi = WiFi.RSSI(index);
+        uint8_t quality = wifiScanQuality(rssi);
+        uint8_t bars = (quality + 24) / 25;
+
+        GP.SEND(F("<a class='wifi-net' href='#' onclick='wifiPick(this);return false;'>"
+                  "<span class='wifi-name'>"));
+        GP.SEND(wifiScanEscapeHtml(WiFi.SSID(index)));
+        GP.SEND(F("</span><span class='wifi-rssi'>"));
+        if(WiFi.encryptionType(index) != ENC_TYPE_NONE) GP.SEND(F("&#128274; "));
+        GP.SEND(String(quality));
+        GP.SEND(F("% <span class='wifi-bars'>"));
+        for(uint8_t bar = 0; bar < 4; bar++)
+          GP.SEND(bar < bars ? F("<i class='on'></i>") : F("<i></i>"));
+        GP.SEND(F("</span></span></a>"));
+      }
+
+      GP.JS_BEGIN();
+      GP.SEND(F(
+        "function wifiPick(row){"
+          "document.getElementById('ssid').value="
+            "row.querySelector('.wifi-name').textContent;"
+          "document.getElementById('pass').focus();"
+        "}"));
+      GP.JS_END();
+
+      if(!expanded && unique > shown){
+        GP.SEND(F("<a href='"));
+        GP.SEND(form.WiFiConfig);
+        GP.SEND(F("?all=1'>Show more WiFi networks</a><br>"));
+      }
+    }
+
+    if(found != WIFI_SCAN_RUNNING){
+      GP.SEND(F("<a href='"));
+      GP.SEND(form.WiFiConfig);
+      GP.SEND(F("?scan=1'>Scan again</a>"));
+    }
+  GP.BLOCK_END();
+}
+
+
 void portalBuild(){
   uint32_t retryLeft = corewifi::retryLeftSeconds();
 
@@ -158,6 +327,8 @@ void portalBuild(){
         GP.PAGE_TITLE("WiFi configuration");
         GP.TITLE("WiFi");
         GP.HR();
+
+        wifiScanBuild();
 
         GP.BLOCK_TAB_BEGIN("Information");
           if (WiFi.status() == WL_CONNECTED){
