@@ -161,10 +161,35 @@ void test_ap_closes_while_portal_busy_over_sta(void) {
 
 // --- Новые креды ----------------------------------------------------------
 
-void test_new_credentials_attempt_immediately(void) {
+// Новые креды применяются не в тот же миг, а спустя короткую паузу.
+//
+// Вызов приходит из обработчика формы портала, а тот работает ДО отправки
+// ответа на POST (portal.h:221 -- _action(), и только потом show()). Смена
+// режима радио рвёт то самое соединение, по которому ответ должен уйти:
+// на железе страница просто зависала, статус не обновлялся. Пауза даёт
+// ответу покинуть устройство.
+void test_new_credentials_wait_before_touching_radio(void) {
   sm.begin(0, in(false));  // AP, кредов нет
-  TEST_ASSERT_EQUAL(WifiAction::StartAttempt, sm.onCredentialsChanged(5000));
+  sm.onCredentialsChanged(5000);
+
+  TEST_ASSERT_EQUAL_MESSAGE(
+      WifiAction::None, sm.tick(5000 + WIFI_CREDENTIALS_DELAY_MS - 1, in(true)),
+      "радио дёрнули раньше, чем ушёл ответ на форму");
+  TEST_ASSERT_EQUAL(WifiAction::StartAttempt,
+                    sm.tick(5000 + WIFI_CREDENTIALS_DELAY_MS, in(true)));
   TEST_ASSERT_EQUAL(WifiState::Connecting, sm.state());
+}
+
+// Пока пауза не вышла, автомат не занимается ничем другим: повтор по таймеру
+// всё равно сейчас будет заменён попыткой с новыми кредами.
+void test_pending_credentials_hold_off_scheduled_retry(void) {
+  sm.begin(0, in(true));
+  sm.tick(WIFI_ATTEMPT_TIMEOUT_MS, in(true));  // -> ApOnly
+  uint32_t due = WIFI_ATTEMPT_TIMEOUT_MS + WIFI_RETRY_STEPS_MS[0];
+
+  sm.onCredentialsChanged(due - 10);
+  TEST_ASSERT_EQUAL(WifiAction::None, sm.tick(due, in(true)));
+  TEST_ASSERT_EQUAL(WifiState::ApOnly, sm.state());
 }
 
 void test_new_credentials_reset_backoff(void) {
@@ -178,6 +203,8 @@ void test_new_credentials_reset_backoff(void) {
   }
 
   sm.onCredentialsChanged(t);
+  t += WIFI_CREDENTIALS_DELAY_MS;
+  sm.tick(t, in(true));  // -> Connecting с новыми кредами
   t += WIFI_ATTEMPT_TIMEOUT_MS;
   sm.tick(t, in(true));  // снова неудача
   TEST_ASSERT_EQUAL_UINT32(WIFI_RETRY_STEPS_MS[0], sm.retryLeftMs(t));
@@ -187,7 +214,10 @@ void test_new_credentials_reset_backoff(void) {
 void test_bad_new_credentials_fall_back_to_ap(void) {
   sm.begin(0, in(true));
   sm.onCredentialsChanged(1000);
-  TEST_ASSERT_EQUAL(WifiAction::OpenAp, sm.tick(1000 + WIFI_ATTEMPT_TIMEOUT_MS, in(true)));
+  uint32_t started = 1000 + WIFI_CREDENTIALS_DELAY_MS;
+  sm.tick(started, in(true));
+  TEST_ASSERT_EQUAL(WifiAction::OpenAp,
+                    sm.tick(started + WIFI_ATTEMPT_TIMEOUT_MS, in(true)));
 }
 
 // --- Потеря связи после подключения ---------------------------------------
@@ -287,7 +317,8 @@ int main(int argc, char** argv) {
   RUN_TEST(test_retry_waits_while_portal_busy);
   RUN_TEST(test_ap_close_waits_while_ap_has_clients);
   RUN_TEST(test_ap_closes_while_portal_busy_over_sta);
-  RUN_TEST(test_new_credentials_attempt_immediately);
+  RUN_TEST(test_new_credentials_wait_before_touching_radio);
+  RUN_TEST(test_pending_credentials_hold_off_scheduled_retry);
   RUN_TEST(test_new_credentials_reset_backoff);
   RUN_TEST(test_bad_new_credentials_fall_back_to_ap);
   RUN_TEST(test_lost_connection_retries_before_ap);

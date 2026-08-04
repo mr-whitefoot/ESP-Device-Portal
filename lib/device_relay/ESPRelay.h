@@ -40,10 +40,20 @@ class ESPRelay{
     }
 
     void SetState( bool relayState ){
+      bool changed = (this->relayState != relayState);
+
+      // Запись в пин безусловна намеренно: уровень зависит не только от
+      // состояния, но и от инверсии, а SetInvertMode() переприменяет ровно
+      // то же состояние с новой полярностью.
       digitalWrite(pin, levelFor(relayState));
       this->relayState = relayState;
 
-      if (CallbackHandler) CallbackHandler();
+      // А вот колбэк -- только на фактическое изменение. Он публикует
+      // состояние в MQTT и пишет флеш, то есть стоит и эфира, и ресурса
+      // памяти. Повторная команда из HomeAssistant приходит при каждом
+      // нажатии, а SetInvertMode() дёргал его на каждом сохранении формы
+      // Preferences -- и это уже вылезало на железе лишним state в брокере.
+      if (changed && CallbackHandler) CallbackHandler();
     }
 
     bool GetState(){ return relayState; }

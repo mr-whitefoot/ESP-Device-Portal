@@ -61,6 +61,15 @@ static const uint8_t WIFI_RETRY_STEP_COUNT =
 // Связь может моргнуть, поэтому разрыв признаём не сразу.
 static const uint32_t WIFI_LOST_GRACE_MS = 10000;
 
+// Пауза между сохранением новых кредов и попыткой их применить.
+//
+// Сохранение приходит из обработчика формы портала, а тот работает ДО того,
+// как ответ на POST отправлен (portal.h:221 -- сперва _action(), потом
+// show()). Смена режима радио рвёт ровно то соединение, по которому ответ
+// должен уйти: на железе страница после сохранения просто зависала. Паузы
+// хватает, чтобы ответ покинул устройство; для пользователя она незаметна.
+static const uint32_t WIFI_CREDENTIALS_DELAY_MS = 1000;
+
 class WifiStateMachine {
  public:
   // Выбрать стартовое состояние. Возвращает первое действие.
@@ -73,16 +82,27 @@ class WifiStateMachine {
     return _startAttempt(now);
   }
 
-  // Пользователь сохранил новые креды: пробуем немедленно, не дожидаясь
-  // паузы, и сбрасываем счётчик повторов -- это новая попытка, не продолжение
-  // прежних неудач.
-  WifiAction onCredentialsChanged(uint32_t now) {
-    _retryStep = 0;
-    _lostSeen = false;
-    return _startAttempt(now);
+  // Пользователь сохранил новые креды: пробуем, не дожидаясь паузы повтора,
+  // и сбрасываем счётчик -- это новая попытка, а не продолжение прежних
+  // неудач. Действие возвращается не отсюда, а из ближайшего tick() после
+  // WIFI_CREDENTIALS_DELAY_MS: трогать радио прямо здесь нельзя, вызов идёт
+  // из обработчика формы, чей ответ ещё не отправлен.
+  void onCredentialsChanged(uint32_t now) {
+    _credPending = true;
+    _credSince = now;
   }
 
   WifiAction tick(uint32_t now, const WifiInputs& in) {
+    // Отложенные креды старше всего остального: очередной повтор по таймеру
+    // всё равно был бы тут же заменён попыткой с новым паролем.
+    if (_credPending) {
+      if (now - _credSince < WIFI_CREDENTIALS_DELAY_MS) return WifiAction::None;
+      _credPending = false;
+      _retryStep = 0;
+      _lostSeen = false;
+      return _startAttempt(now);
+    }
+
     switch (_state) {
       case WifiState::Connecting: return _tickConnecting(now, in);
       case WifiState::ApOnly:     return _tickApOnly(now, in);
@@ -109,6 +129,8 @@ class WifiStateMachine {
   uint32_t _since = 0;      // когда вошли в текущее состояние
   bool _lostSeen = false;   // связь пропала, отсчитываем выдержку
   uint32_t _lostSince = 0;  // когда впервые заметили пропажу
+  bool _credPending = false;  // сохранены новые креды, ждём отправки ответа
+  uint32_t _credSince = 0;    // когда их сохранили
   // Номер повтора для нарастающей паузы. Увеличивается при СТАРТЕ повтора,
   // а не при неудаче: иначе первое ожидание брало бы вторую ступень.
   uint8_t _retryStep = 0;

@@ -138,6 +138,42 @@ void test_callback_fires_on_state_change(void) {
   TEST_ASSERT_EQUAL(2, callbackCalls);
 }
 
+// Колбэк публикует состояние в MQTT и пишет флеш, поэтому на команду,
+// ничего не меняющую, он дёргаться не должен. HomeAssistant повторяет
+// команду при каждом нажатии, независимо от того, что показывает.
+void test_callback_silent_on_repeated_state(void) {
+  ESPRelay relay;
+  relay.begin(RELAY_PIN, false);
+  callbackCalls = 0;
+  relay.ChangeStateCallback(countCallback);
+
+  relay.SetState(true);
+  relay.SetState(true);
+  TEST_ASSERT_EQUAL_MESSAGE(1, callbackCalls, "повторная команда дёрнула колбэк");
+
+  relay.SetState(false);
+  relay.SetState(false);
+  TEST_ASSERT_EQUAL_MESSAGE(2, callbackCalls, "повторная команда дёрнула колбэк");
+}
+
+// Смена инверсии описывает железо: полярность выхода меняется, а состояние
+// с точки зрения пользователя остаётся прежним -- публиковать нечего.
+// На железе это вылезало так: сохранение формы Preferences зовёт
+// SetInvertMode() и клало в брокер лишний state, причём в старый топик,
+// если на той же форме сменили имя устройства.
+void test_invert_mode_change_does_not_fire_callback(void) {
+  ESPRelay relay;
+  relay.begin(RELAY_PIN, false);
+  relay.SetState(true);
+
+  callbackCalls = 0;
+  relay.ChangeStateCallback(countCallback);
+  relay.SetInvertMode(true);
+
+  TEST_ASSERT_EQUAL_MESSAGE(0, callbackCalls, "смена инверсии опубликовала состояние");
+  TEST_ASSERT_EQUAL_MESSAGE(LOW, pinWrites().back().level, "полярность не переключилась");
+}
+
 int main(int argc, char** argv) {
   UNITY_BEGIN();
   RUN_TEST(test_constructor_does_not_touch_pin);
@@ -152,5 +188,7 @@ int main(int argc, char** argv) {
   RUN_TEST(test_invert_mode_change_keeps_logical_state);
   RUN_TEST(test_state_change_without_callback_is_safe);
   RUN_TEST(test_callback_fires_on_state_change);
+  RUN_TEST(test_callback_silent_on_repeated_state);
+  RUN_TEST(test_invert_mode_change_does_not_fire_callback);
   return UNITY_END();
 }
