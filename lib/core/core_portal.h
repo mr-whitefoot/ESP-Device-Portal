@@ -240,7 +240,7 @@ void portalBuild(){
 
     // Root page, "/"
   } else {
-    GP.PAGE_TITLE("Portal");
+    GP.PAGE_TITLE(settings::getStringValue(keys::dev::name));
     GP.FORM_BEGIN(form.root);
       device::buildHomeUi();
 
