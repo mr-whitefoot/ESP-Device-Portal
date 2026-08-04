@@ -14,9 +14,9 @@ jobs:
     name: Юнит-тесты (native)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -25,7 +25,7 @@ jobs:
 
       # Окружение native ничего не качает с платформенных серверов, но кеш
       # ядра всё равно экономит распаковку toolchain при повторных прогонах.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.platformio
           key: pio-native-${{ hashFiles('platformio.ini') }}
@@ -47,9 +47,9 @@ jobs:
           - esp01_relay_metrics
           - esp01_ds18b20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -59,7 +59,7 @@ jobs:
       # Платформа espressif8266 с framework-arduino и toolchain -- это сотни
       # мегабайт на скачивание, ради них кеш и нужен. Ключ по platformio.ini:
       # там зафиксированы и платформа, и версии библиотек.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.platformio
           key: pio-esp8266-${{ hashFiles('platformio.ini') }}
@@ -83,7 +83,7 @@ jobs:
           echo "### ${{ matrix.environment }}" >> "$GITHUB_STEP_SUMMARY"
           echo "\`${headroom:-нет строки OTA headroom}\`" >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.environment }}
           # Имя bin-файла задаёт extra_script.py: ESP_<устройство>_v<версия>.bin.
