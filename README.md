@@ -1,5 +1,8 @@
 # ESP-Device-Portal
 
+[![CI](https://github.com/mr-whitefoot/ESP-Device-Portal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mr-whitefoot/ESP-Device-Portal/actions/workflows/ci.yml)
+[![Release](https://github.com/mr-whitefoot/ESP-Device-Portal/actions/workflows/release.yml/badge.svg)](https://github.com/mr-whitefoot/ESP-Device-Portal/actions/workflows/release.yml)
+
 Прошивка для ESP-01/ESP-01s с web-порталом и интеграцией в HomeAssistant.
 
 Одна кодовая база, два устройства: **реле** и **датчик температуры DS18B20**.
@@ -200,6 +203,18 @@ OTA headroom: 463984 of 481280 bytes used (96.4%), 17296 left
 поверх, поэтому устойчивый предел — половина области под скетч. Прошивка
 крупнее зальётся по проводу и будет работать, но следующую по воздуху уже не
 примет. При превышении сборка падает.
+
+### Сборка в CI
+
+То же самое повторяется на GitHub Actions при каждом push в `main`/`dev` и на
+каждый pull request: юнит-тесты плюс сборка трёх окружений, включая
+диагностическое `esp01_relay_metrics`. Строка `OTA headroom` каждого окружения
+попадает в сводку прогона, а bin и elf — в артефакты, где лежат 30 дней.
+
+Тег вида `version_3.7.1` дополнительно собирает прошивки заново и публикует их
+в GitHub Release. В релиз идут только реле и датчик; диагностическая сборка
+туда не попадает. Если версия в теге не совпадает с `release_version` из
+`platformio.ini`, публикация падает, не создав релиз.
 
 
 ## Прошивка по воздуху

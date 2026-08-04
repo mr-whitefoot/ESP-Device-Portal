@@ -1,0 +1,84 @@
+name: Release
+
+# Тег вида version_3.7.1 -- схема, по которой репозиторий уже помечает релизы.
+# Прошивки собираются заново из состояния тега, а не берутся из артефактов CI:
+# артефакт живёт 30 дней и может не пережить релиз, к которому его прикладывают.
+on:
+  push:
+    tags:
+      - 'version_*'
+
+# gh release create пишет в репозиторий, токену по умолчанию этого мало.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Собрать и опубликовать прошивки
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Установить PlatformIO
+        run: pip install platformio
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-esp8266-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-esp8266-
+
+      # Версия живёт в двух местах: в имени тега и в release_version, откуда её
+      # берут -DVERSION и имя bin-файла. Разъехаться они могут только так:
+      # тег поставлен, а release_version поднять забыли. Тогда релиз version_3.7.2
+      # нёс бы файлы с именем v3.7.1 и прошивку, которая по MQTT представляется
+      # старым номером. Дешевле упасть здесь.
+      - name: Сверить тег с release_version
+        run: |
+          tag_version="${GITHUB_REF_NAME#version_}"
+          ini_version=$(sed -n 's/^release_version *= *//p' platformio.ini | head -1)
+          if [ "$tag_version" != "$ini_version" ]; then
+            echo "Тег $GITHUB_REF_NAME обещает версию $tag_version," \
+                 "а в platformio.ini release_version = $ini_version." >&2
+            exit 1
+          fi
+          echo "version=$tag_version" >> "$GITHUB_ENV"
+
+      # Только устройства, а не диагностическая сборка esp01_relay_metrics:
+      # в релизе лежит то, что можно заливать на железо, и метрики loop() в
+      # serial туда не относятся. При необходимости она собирается из CI.
+      - name: Собрать прошивки
+        run: pio run -e esp01_relay -e esp01_ds18b20 2>&1 | tee build.log
+
+      - name: Сложить бинарники
+        run: |
+          mkdir dist
+          cp .pio/build/esp01_relay/*.bin .pio/build/esp01_ds18b20/*.bin dist/
+          ls -l dist
+
+      # Запас по OTA -- в тело релиза: по нему видно, сколько места осталось
+      # у версии, которую потом будут заливать по воздуху.
+      - name: Подготовить заметки
+        run: |
+          {
+            echo "## Прошивки"
+            echo
+            echo "Файлы собраны из тега \`$GITHUB_REF_NAME\`."
+            echo
+            echo '```'
+            grep 'OTA headroom' build.log || echo "строка OTA headroom не найдена"
+            echo '```'
+          } > notes.md
+
+      - name: Создать релиз
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.bin \
+            --title "ESP-Device-Portal $version" \
+            --notes-file notes.md \
+            --generate-notes

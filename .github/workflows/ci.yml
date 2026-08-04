@@ -1,0 +1,95 @@
+name: CI
+
+# Проверка повторяет то, что описано в AGENTS.md: юнит-тесты чистой логики
+# плюс сборка обоих устройств. Диагностическая сборка реле собирается тоже --
+# она делит код с обычной, и ломается ровно так же незаметно.
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Юнит-тесты (native)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Установить PlatformIO
+        run: pip install platformio
+
+      # Окружение native ничего не качает с платформенных серверов, но кеш
+      # ядра всё равно экономит распаковку toolchain при повторных прогонах.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-native-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-native-
+
+      - name: pio test -e native
+        run: pio test -e native
+
+  build:
+    name: Сборка ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Одно упавшее окружение не должно скрывать состояние остальных:
+      # по общему ядру важно видеть, у кого именно не сошлось.
+      fail-fast: false
+      matrix:
+        environment:
+          - esp01_relay
+          - esp01_relay_metrics
+          - esp01_ds18b20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Установить PlatformIO
+        run: pip install platformio
+
+      # Платформа espressif8266 с framework-arduino и toolchain -- это сотни
+      # мегабайт на скачивание, ради них кеш и нужен. Ключ по platformio.ini:
+      # там зафиксированы и платформа, и версии библиотек.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-esp8266-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-esp8266-
+
+      # platformio_override.ini лежит в .gitignore и в CI отсутствует.
+      # PlatformIO это переживает: недостающий файл из extra_configs
+      # пропускается молча, окружения остаются без upload_port -- то есть
+      # залить что-либо на живое устройство из CI нельзя даже случайно.
+      - name: pio run -e ${{ matrix.environment }}
+        run: pio run -e ${{ matrix.environment }} 2>&1 | tee build.log
+
+      # Успешная линковка для ESP-01 недостаточна: прошивка обязана помещаться
+      # рядом со старой, иначе OTA больше не пройдёт, а USB на ESP-01 нет.
+      # Сам предел проверяет extra_script_ota.py и роняет сборку при превышении;
+      # здесь строка с запасом просто выносится на видное место.
+      - name: Запас по OTA в сводку
+        if: always()
+        run: |
+          headroom=$(grep -m1 'OTA headroom' build.log || true)
+          echo "### ${{ matrix.environment }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`${headroom:-нет строки OTA headroom}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.environment }}
+          # Имя bin-файла задаёт extra_script.py: ESP_<устройство>_v<версия>.bin.
+          # Рядом кладётся elf -- по нему разбирается стектрейс с железа.
+          path: |
+            .pio/build/${{ matrix.environment }}/*.bin
+            .pio/build/${{ matrix.environment }}/*.elf
+          if-no-files-found: error
+          retention-days: 30
