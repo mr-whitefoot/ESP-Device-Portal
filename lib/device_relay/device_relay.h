@@ -42,7 +42,10 @@ void timersLoad() {
 void onRelayChanged() {
   println("Change relay state triggered");
 
-  if (settings::getBool(keys::relay::saveState)) {
+  // В Button mode состояния ON живут всего полсекунды. Сохранять каждую
+  // пару ON/OFF во флеш бессмысленно и вредно для его ресурса.
+  if (settings::getBool(keys::relay::saveState) &&
+      !settings::getBool(keys::relay::buttonMode)) {
     bool state = relay.GetState();
 
     // Пишем сразу, а не откладываем до settings::tick(). Отложенная запись
@@ -134,6 +137,7 @@ const char* updateIds() { return "switch"; }
 
 void defineSettings() {
   settings::defineBool(keys::relay::invert, false);
+  settings::defineBool(keys::relay::buttonMode, false);
   settings::defineBool(keys::relay::saveState, false);
   settings::defineBool(keys::relay::state, false);
 
@@ -149,11 +153,14 @@ void defineSettings() {
 void begin() {
   // Сохранённое состояние передаётся сразу в begin(): реле поднимается в
   // нужном положении одним движением, без промежуточного "выключено".
-  bool restored = settings::getBool(keys::relay::saveState) &&
+  bool buttonMode = settings::getBool(keys::relay::buttonMode);
+  bool restored = !buttonMode &&
+                  settings::getBool(keys::relay::saveState) &&
                   settings::getBool(keys::relay::state);
   if (restored) println("Restore relay state: on");
 
-  detail::relay.begin(RELAY_PIN, settings::getBool(keys::relay::invert), restored);
+  detail::relay.begin(RELAY_PIN, settings::getBool(keys::relay::invert),
+                      restored, buttonMode);
   detail::relay.ChangeStateCallback(detail::onRelayChanged);
 
   detail::timersLoad();
@@ -165,6 +172,7 @@ void begin() {
 }
 
 void tick() {
+  detail::relay.Tick();
   detail::scheduleTick.tick();
 }
 
@@ -206,6 +214,10 @@ void buildSettingsUi() {
       GP.SWITCH("relayInvertMode", settings::getBool(keys::relay::invert));
     GP.BOX_END();
     GP.BOX_BEGIN(GP_EDGES);
+      GP.LABEL("Button mode");
+      GP.SWITCH("relayButtonMode", settings::getBool(keys::relay::buttonMode));
+    GP.BOX_END();
+    GP.BOX_BEGIN(GP_EDGES);
       GP.LABEL("Save relay status");
       GP.SWITCH("relaySaveStatus", settings::getBool(keys::relay::saveState));
     GP.BOX_END();
@@ -216,6 +228,13 @@ void readSettingsForm() {
   bool invert = portal.getCheck("relayInvertMode");
   settings::setBool(keys::relay::invert, invert);
   detail::relay.SetInvertMode(invert);
+
+  bool buttonMode = portal.getCheck("relayButtonMode");
+  settings::setBool(keys::relay::buttonMode, buttonMode);
+  // Старое сохранённое ON не должно внезапно восстановиться, если Button
+  // mode позднее выключат и перезагрузят устройство до новой команды.
+  if (buttonMode) settings::setBool(keys::relay::state, false);
+  detail::relay.SetButtonMode(buttonMode);
 
   settings::setBool(keys::relay::saveState, portal.getCheck("relaySaveStatus"));
 }

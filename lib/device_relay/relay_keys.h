@@ -12,6 +12,7 @@ namespace keys {
 
 namespace relay {
 constexpr settings::Key invert{"relay.invert"};
+constexpr settings::Key buttonMode{"relay.buttonMode"};
 constexpr settings::Key saveState{"relay.saveState"};
 constexpr settings::Key state{"relay.state"};
 }  // namespace relay

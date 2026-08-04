@@ -1,6 +1,8 @@
 #include <Arduino.h>
 class ESPRelay{
   public:
+    static constexpr uint32_t BUTTON_PRESS_MS = 500;
+
     // Конструктор намеренно не трогает железо: объект глобальный, а значит
     // создаётся до setup(). Раньше здесь были pinMode() и SetState(false),
     // и пин уходил в LOW ещё до чтения настроек -- на плате с активным низким
@@ -18,17 +20,23 @@ class ESPRelay{
     // initialState -- состояние, с которым реле должно подняться. Передавать
     // сюда сохранённое значение важно: иначе пин сперва уходит в "выключено",
     // а затем во "включено", и реле щёлкает дважды на каждой загрузке.
-    void begin( int pin, bool invertMode, bool initialState = false ){
+    void begin( int pin, bool invertMode, bool initialState = false,
+                bool buttonMode = false ){
       this->pin = pin;
       this->invertMode = invertMode;
-      this->relayState = initialState;
+      this->buttonMode = buttonMode;
+
+      // Импульсный режим никогда не восстанавливает нажатие после загрузки:
+      // это было бы защёлкиванием до первого tick(), то есть ровно тем, от
+      // чего Button mode должен защищать.
+      this->relayState = buttonMode ? false : initialState;
 
       // Уровень задаётся ДО перевода пина в выход. pinMode(OUTPUT) выставляет
       // на ножку содержимое защёлки, а она после сброса нулевая -- на плате с
       // активным низким уровнем это кратковременное включение реле. До этого
       // GPIO0 держится внешней подтяжкой в HIGH, иначе ESP-01 не загрузится,
       // то есть реле выключено, и щелчка быть не должно вовсе.
-      digitalWrite(pin, levelFor(initialState));
+      digitalWrite(pin, levelFor(this->relayState));
       pinMode(pin, OUTPUT);
     }
 
@@ -39,8 +47,23 @@ class ESPRelay{
       SetState(relayState);
     }
 
+    // При переходе из обычного режима в импульсный уже включённое реле
+    // отпускается сразу. Иначе настройка Button mode могла бы оставить
+    // нагрузку защёлкнутой до следующей команды.
+    void SetButtonMode( bool buttonMode ){
+      if (this->buttonMode == buttonMode) return;
+
+      this->buttonMode = buttonMode;
+      if (buttonMode && relayState) SetState(false);
+    }
+
     void SetState( bool relayState ){
       bool changed = (this->relayState != relayState);
+
+      // Повторная команда ON начинает полусекундный импульс заново. Это
+      // соответствует удержанию кнопки и не вызывает лишний колбэк, потому
+      // что логическое состояние при этом не меняется.
+      if (buttonMode && relayState) buttonPressedAt = millis();
 
       // Запись в пин безусловна намеренно: уровень зависит не только от
       // состояния, но и от инверсии, а SetInvertMode() переприменяет ровно
@@ -58,6 +81,17 @@ class ESPRelay{
 
     bool GetState(){ return relayState; }
 
+    bool GetButtonMode(){ return buttonMode; }
+
+    // Неблокирующее отпускание кнопки. Вызывающий обязан звать Tick() из
+    // loop(); вычитание без сравнения абсолютных времён корректно работает
+    // и при переполнении millis().
+    void Tick(){
+      if (buttonMode && relayState &&
+          (uint32_t)(millis() - buttonPressedAt) >= BUTTON_PRESS_MS)
+        SetState(false);
+    }
+
     void ResetState( ){
       if (GetState())
           this->SetState(false);
@@ -74,6 +108,8 @@ class ESPRelay{
 
     int pin;
     bool invertMode;
+    bool buttonMode = false;
     bool relayState = false;
+    uint32_t buttonPressedAt = 0;
     void (*CallbackHandler)() = nullptr;
 };

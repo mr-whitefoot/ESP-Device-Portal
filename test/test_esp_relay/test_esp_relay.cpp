@@ -174,6 +174,85 @@ void test_invert_mode_change_does_not_fire_callback(void) {
   TEST_ASSERT_EQUAL_MESSAGE(LOW, pinWrites().back().level, "полярность не переключилась");
 }
 
+void test_button_mode_releases_after_half_second(void) {
+  ESPRelay relay;
+  relay.begin(RELAY_PIN, false, false, true);
+  relay.SetState(true);
+
+  TEST_ASSERT_TRUE(relay.GetState());
+  TEST_ASSERT_EQUAL(HIGH, pinWrites().back().level);
+
+  fakeMillis() = ESPRelay::BUTTON_PRESS_MS - 1;
+  relay.Tick();
+  TEST_ASSERT_TRUE_MESSAGE(relay.GetState(), "кнопка отпущена раньше 500 мс");
+
+  fakeMillis() = ESPRelay::BUTTON_PRESS_MS;
+  relay.Tick();
+  TEST_ASSERT_FALSE_MESSAGE(relay.GetState(), "кнопка не отпущена через 500 мс");
+  TEST_ASSERT_EQUAL(LOW, pinWrites().back().level);
+}
+
+void test_button_mode_respects_invert_mode(void) {
+  ESPRelay relay;
+  relay.begin(RELAY_PIN, true, false, true);
+  relay.SetState(true);
+  TEST_ASSERT_EQUAL(LOW, pinWrites().back().level);
+
+  fakeMillis() = ESPRelay::BUTTON_PRESS_MS;
+  relay.Tick();
+  TEST_ASSERT_EQUAL(HIGH, pinWrites().back().level);
+}
+
+void test_repeated_button_press_restarts_hold_time(void) {
+  ESPRelay relay;
+  relay.begin(RELAY_PIN, false, false, true);
+  relay.SetState(true);
+
+  fakeMillis() = 400;
+  relay.SetState(true);
+  fakeMillis() = 899;
+  relay.Tick();
+  TEST_ASSERT_TRUE_MESSAGE(relay.GetState(), "повторное нажатие не продлило импульс");
+
+  fakeMillis() = 900;
+  relay.Tick();
+  TEST_ASSERT_FALSE(relay.GetState());
+}
+
+void test_enabling_button_mode_releases_latched_relay(void) {
+  ESPRelay relay;
+  relay.begin(RELAY_PIN, false);
+  relay.SetState(true);
+  relay.SetButtonMode(true);
+
+  TEST_ASSERT_TRUE(relay.GetButtonMode());
+  TEST_ASSERT_FALSE_MESSAGE(relay.GetState(), "реле осталось защёлкнутым");
+  TEST_ASSERT_EQUAL(LOW, pinWrites().back().level);
+}
+
+void test_button_mode_does_not_restore_saved_on_state(void) {
+  ESPRelay relay;
+  relay.begin(RELAY_PIN, true, true, true);
+
+  TEST_ASSERT_FALSE_MESSAGE(relay.GetState(), "Button mode восстановил нажатие");
+  TEST_ASSERT_FALSE_MESSAGE(everDroveActive(true), "реле включилось при загрузке");
+}
+
+void test_button_timeout_survives_millis_overflow(void) {
+  ESPRelay relay;
+  relay.begin(RELAY_PIN, false, false, true);
+  fakeMillis() = 0xFFFFFF00UL;
+  relay.SetState(true);
+
+  fakeMillis() = 0x000000F3UL;  // 499 мс после нажатия через переполнение
+  relay.Tick();
+  TEST_ASSERT_TRUE(relay.GetState());
+
+  fakeMillis() = 0x000000F4UL;  // ровно 500 мс
+  relay.Tick();
+  TEST_ASSERT_FALSE(relay.GetState());
+}
+
 int main(int argc, char** argv) {
   UNITY_BEGIN();
   RUN_TEST(test_constructor_does_not_touch_pin);
@@ -190,5 +269,11 @@ int main(int argc, char** argv) {
   RUN_TEST(test_callback_fires_on_state_change);
   RUN_TEST(test_callback_silent_on_repeated_state);
   RUN_TEST(test_invert_mode_change_does_not_fire_callback);
+  RUN_TEST(test_button_mode_releases_after_half_second);
+  RUN_TEST(test_button_mode_respects_invert_mode);
+  RUN_TEST(test_repeated_button_press_restarts_hold_time);
+  RUN_TEST(test_enabling_button_mode_releases_latched_relay);
+  RUN_TEST(test_button_mode_does_not_restore_saved_on_state);
+  RUN_TEST(test_button_timeout_survives_millis_overflow);
   return UNITY_END();
 }
