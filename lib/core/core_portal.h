@@ -44,10 +44,40 @@ String wifiScanEscapeHtml(const String& value){
   return escaped;
 }
 
-uint8_t wifiScanQuality(int32_t rssi){
+uint8_t wifiSignalQuality(int32_t rssi){
   if(rssi <= -100) return 0;
   if(rssi >= -50) return 100;
   return static_cast<uint8_t>(2 * (rssi + 100));
+}
+
+void wifiSignalStyle(){
+  GP.SEND(F(
+    "<style>"
+    ".wifi-rssi{white-space:nowrap;font-size:.85em;opacity:.8}"
+    ".wifi-bars{display:inline-flex;align-items:flex-end;height:14px;margin-left:5px}"
+    ".wifi-bars i{display:block;width:3px;margin-left:1px;border-radius:2px;"
+      "background:currentColor;opacity:.25}"
+    ".wifi-bars i.on{opacity:1}"
+    ".wifi-bars i:nth-child(1){height:25%}"
+    ".wifi-bars i:nth-child(2){height:50%}"
+    ".wifi-bars i:nth-child(3){height:75%}"
+    ".wifi-bars i:nth-child(4){height:100%}"
+    "</style>"));
+}
+
+String wifiSignalHtml(int32_t rssi, bool secured = false){
+  uint8_t quality = wifiSignalQuality(rssi);
+  uint8_t bars = (quality + 24) / 25;
+  String html;
+  html.reserve(150);
+  html += F("<span class='wifi-rssi'>");
+  if(secured) html += F("&#128274; ");
+  html += String(quality);
+  html += F("% <span class='wifi-bars'>");
+  for(uint8_t bar = 0; bar < 4; bar++)
+    html += bar < bars ? F("<i class='on'></i>") : F("<i></i>");
+  html += F("</span></span>");
+  return html;
 }
 
 // Возвращает индексы уникальных SSID от сильного к слабому. Для одинакового
@@ -118,6 +148,7 @@ void wifiScanBuild(){
   bool expanded = portal.hasArg("all") || portal.hasArg("scan");
   int16_t found = wifiScanStatus();
 
+  wifiSignalStyle();
   GP.BLOCK_TAB_BEGIN("Available networks");
     if(found == WIFI_SCAN_RUNNING){
       GP.LABEL("Scanning...");
@@ -136,33 +167,18 @@ void wifiScanBuild(){
         ".wifi-net{display:flex;align-items:center;justify-content:space-between;"
           "gap:8px;padding:8px 4px;text-decoration:none}"
         ".wifi-name{overflow-wrap:anywhere;text-align:left}"
-        ".wifi-rssi{white-space:nowrap;font-size:.85em;opacity:.8}"
-        ".wifi-bars{display:inline-flex;align-items:flex-end;height:14px;margin-left:5px}"
-        ".wifi-bars i{display:block;width:3px;margin-left:1px;border-radius:2px;"
-          "background:currentColor;opacity:.25}"
-        ".wifi-bars i.on{opacity:1}"
-        ".wifi-bars i:nth-child(1){height:25%}"
-        ".wifi-bars i:nth-child(2){height:50%}"
-        ".wifi-bars i:nth-child(3){height:75%}"
-        ".wifi-bars i:nth-child(4){height:100%}"
         "</style>"));
 
       for(uint8_t i = 0; i < shown; i++){
         uint8_t index = indices[i];
         int32_t rssi = WiFi.RSSI(index);
-        uint8_t quality = wifiScanQuality(rssi);
-        uint8_t bars = (quality + 24) / 25;
 
         GP.SEND(F("<a class='wifi-net' href='#' onclick='wifiPick(this);return false;'>"
                   "<span class='wifi-name'>"));
         GP.SEND(wifiScanEscapeHtml(WiFi.SSID(index)));
-        GP.SEND(F("</span><span class='wifi-rssi'>"));
-        if(WiFi.encryptionType(index) != ENC_TYPE_NONE) GP.SEND(F("&#128274; "));
-        GP.SEND(String(quality));
-        GP.SEND(F("% <span class='wifi-bars'>"));
-        for(uint8_t bar = 0; bar < 4; bar++)
-          GP.SEND(bar < bars ? F("<i class='on'></i>") : F("<i></i>"));
-        GP.SEND(F("</span></span></a>"));
+        GP.SEND(F("</span>"));
+        GP.SEND(wifiSignalHtml(rssi, WiFi.encryptionType(index) != ENC_TYPE_NONE));
+        GP.SEND(F("</a>"));
       }
 
       GP.JS_BEGIN();
@@ -336,7 +352,7 @@ void portalBuild(){
               GP.LABEL("WiFi status"); GP.LED_GREEN("WiFiLed", true);
             GP.BOX_END();
             GP.BOX_BEGIN(GP_EDGES);
-              GP.LABEL("Signal"); GP.LABEL("","signal");
+              GP.LABEL("Signal"); GP.LABEL(wifiSignalHtml(WiFi.RSSI()), "signal");
             GP.BOX_END();
             GP.BOX_BEGIN(GP_EDGES);
               GP.LABEL("IP address"); GP.LABEL(WiFi.localIP().toString(),"ipAddress");
@@ -415,13 +431,14 @@ void portalBuild(){
     GP.FORM_BEGIN(form.root);
       device::buildHomeUi();
 
+      wifiSignalStyle();
       GP.BLOCK_TAB_BEGIN("WiFi");
         if (WiFi.status() == WL_CONNECTED){
           GP.BOX_BEGIN(GP_EDGES);
             GP.LABEL("Status");GP.LED_GREEN("WiFiLed", true);
           GP.BOX_END();
           GP.BOX_BEGIN(GP_EDGES);
-            GP.LABEL("Signal"); GP.LABEL("","signal");
+            GP.LABEL("Signal"); GP.LABEL(wifiSignalHtml(WiFi.RSSI()), "signal");
           GP.BOX_END();
           GP.BOX_BEGIN(GP_EDGES);
             GP.LABEL("IP address"); GP.LABEL(WiFi.localIP().toString(),"ipAddress");
@@ -580,9 +597,7 @@ void portalCheckForm(){
   }
 
   if (portal.update()){
-    long rssi = WiFi.RSSI();
-    int strength = map(rssi, -80, -20, 0, 100);
-    String wifiStrength = String(strength)+"%";
+    String wifiStrength = wifiSignalHtml(WiFi.RSSI());
     portal.updateString("signal", wifiStrength);
 
     portal.updateInt("mqttStatusLed",mqttClient.isConnected());

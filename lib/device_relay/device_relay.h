@@ -208,6 +208,8 @@ bool buildPage(const String& uri) {
 }
 
 void buildSettingsUi() {
+  bool buttonMode = settings::getBool(keys::relay::buttonMode);
+
   GP.BLOCK_TAB_BEGIN("Relay");
     GP.BOX_BEGIN(GP_EDGES);
       GP.LABEL("Relay invert mode");
@@ -215,13 +217,35 @@ void buildSettingsUi() {
     GP.BOX_END();
     GP.BOX_BEGIN(GP_EDGES);
       GP.LABEL("Button mode");
-      GP.SWITCH("relayButtonMode", settings::getBool(keys::relay::buttonMode));
+      GP.SWITCH("relayButtonMode", buttonMode);
     GP.BOX_END();
+
+    // В импульсном режиме сохранять нечего. Строка остаётся в DOM, чтобы
+    // появиться сразу при выключении Button mode, но скрытый switch disabled
+    // и не участвует в отправке формы.
+    GP.SEND(buttonMode
+      ? F("<div id='relaySaveStatusRow' style='display:none'>")
+      : F("<div id='relaySaveStatusRow'>"));
     GP.BOX_BEGIN(GP_EDGES);
       GP.LABEL("Save relay status");
       GP.SWITCH("relaySaveStatus", settings::getBool(keys::relay::saveState));
     GP.BOX_END();
+    GP.SEND(F("</div>"));
   GP.BLOCK_END();
+
+  GP.JS_BEGIN();
+  GP.SEND(F(
+    "const relayButtonMode=document.getElementById('relayButtonMode');"
+    "const relaySaveStatusRow=document.getElementById('relaySaveStatusRow');"
+    "const relaySaveStatus=document.getElementById('relaySaveStatus');"
+    "function toggleRelaySaveStatus(){"
+      "const visible=!relayButtonMode.checked;"
+      "relaySaveStatusRow.style.display=visible?'block':'none';"
+      "relaySaveStatus.disabled=!visible;"
+    "}"
+    "relayButtonMode.addEventListener('change',toggleRelaySaveStatus);"
+    "toggleRelaySaveStatus();"));
+  GP.JS_END();
 }
 
 void readSettingsForm() {
@@ -236,7 +260,11 @@ void readSettingsForm() {
   if (buttonMode) settings::setBool(keys::relay::state, false);
   detail::relay.SetButtonMode(buttonMode);
 
-  settings::setBool(keys::relay::saveState, portal.getCheck("relaySaveStatus"));
+  // При Button mode поле скрыто и disabled, поэтому браузер его не отправит.
+  // Прежнее значение сохраняем: после возврата в обычный режим пользователь
+  // увидит тот же выбор, который был до включения импульсного режима.
+  if (!buttonMode)
+    settings::setBool(keys::relay::saveState, portal.getCheck("relaySaveStatus"));
 }
 
 bool handleForm() {
