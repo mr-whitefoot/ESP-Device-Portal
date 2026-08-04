@@ -259,7 +259,20 @@ void portalCheckForm(){
 
     // Preferences
     } else if(portal.form(form.preferences)){
-      settings::setString(keys::dev::name, portal.getString("deviceName").c_str());
+      // Имя устройства задаёт топики MQTT, hostname и имя точки доступа,
+      // а строятся они один раз на загрузке -- поэтому смена имени требует
+      // перезагрузки. Остальные настройки на этой странице по-прежнему
+      // применяются на лету.
+      //
+      // Прежнее имя запоминается, чтобы уже после перезагрузки снять с
+      // брокера опубликованное под ним: снимать здесь бесполезно, завещание
+      // вернёт часть обратно. Разбор -- в mqttClearPreviousName().
+      String deviceName = portal.getString("deviceName");
+      String prevName = settings::getStringValue(keys::dev::name);
+      bool nameChanged = deviceName != prevName;
+      if (nameChanged) settings::setString(keys::mqtt::prevName, prevName.c_str());
+
+      settings::setString(keys::dev::name, deviceName.c_str());
 
       device::readSettingsForm();
 
@@ -268,6 +281,8 @@ void portalCheckForm(){
       corentp::setOffsetFromSettings(tzOffsetSeconds(timezone));
 
       settings::commit();
+
+      if (nameChanged) restart();
 
       //MQTT Config
     } else if(portal.form(form.mqttConfig)){

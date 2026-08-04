@@ -45,22 +45,32 @@ void mqttReadConfig() {
 }
 
 
-void topicCreate(){
-  String topicPrefix = mqttData.connection.topicPrefix;
+// Топик по произвольному имени устройства. Отдельно от topicCreate(), потому
+// что снимать retained-сообщения приходится по ПРЕЖНЕМУ имени, а оно к тому
+// моменту в настройках уже не хранится как текущее.
+//
+// Компонент HomeAssistant задаёт устройство: у реле это switch, у датчика
+// sensor. Правила именования общие, поэтому топики строит ядро.
+String topicFor(const String& deviceName, const char* leaf){
+  char safeName[64];
+  sanitizeTopicSegment(deviceName.c_str(), safeName, sizeof(safeName));
 
+  return mqttData.connection.topicPrefix + "/" + device::haComponent() + "/" +
+         safeName + "/" + leaf;
+}
+
+
+void topicCreate(){
   char safeName[64];
   sanitizeTopicSegment(mqttData.connection.clientName.c_str(), safeName, sizeof(safeName));
   mqttData.topicName = safeName;
-  const String& deviceName = mqttData.topicName;
 
-  // Компонент HomeAssistant задаёт устройство: у реле это switch, у датчика
-  // будет sensor. Топики строит ядро, чтобы правила именования были общими.
-  String component = String("/") + device::haComponent() + "/";
+  const String& deviceName = mqttData.connection.clientName;
 
-  mqttData.topic.discovery = topicPrefix + component + deviceName + "/config";
-  mqttData.topic.avaible = topicPrefix + component + deviceName + "/avaible";
-  mqttData.topic.state = topicPrefix + component + deviceName + "/state";
-  mqttData.topic.command = topicPrefix + component + deviceName + "/set";
+  mqttData.topic.discovery = topicFor(deviceName, "config");
+  mqttData.topic.avaible = topicFor(deviceName, "avaible");
+  mqttData.topic.state = topicFor(deviceName, "state");
+  mqttData.topic.command = topicFor(deviceName, "set");
 
   #ifdef DEBUG_MQTT
     println("MQTT discovery topic: "+ mqttData.topic.discovery );
@@ -158,6 +168,56 @@ void mqttStart(){
 }
 
 
+// Пустая полезная нагрузка с retain -- принятый способ снять сохранённое
+// сообщение: брокер выбрасывает его из хранилища, а HomeAssistant на пустой
+// config убирает автообнаруженную сущность.
+//
+// Без этого смена имени устройства оставляла в HomeAssistant вечный призрак:
+// топики строятся из имени, и после переименования старый config продолжал
+// висеть у брокера -- сущность, в которую больше никто никогда не опубликует.
+void mqttClearRetainedFor(const String& deviceName){
+  println("MQTT clearing retained topics for " + deviceName);
+  mqttClient.publish(topicFor(deviceName, "config"), "", true);
+  mqttClient.publish(topicFor(deviceName, "state"), "", true);
+  mqttClient.publish(topicFor(deviceName, "avaible"), "", true);
+  mqttClient.loop();
+}
+
+
+void mqttClearRetained(){
+  if (!mqttClient.isConnected()){
+    println("MQTT is offline, retained topics left as is");
+    return;
+  }
+  mqttClearRetainedFor(mqttData.connection.clientName);
+}
+
+
+// Уборка за переименованием -- уже после перезагрузки, на свежем подключении.
+//
+// Сделать это в момент смены имени не выходит: перезагрузка рвёт соединение,
+// и брокер тут же публикует завещание в старый avaible, возвращая только что
+// убранное. Корректно попрощаться с брокером тоже нельзя -- EspMQTTClient
+// держит disconnect() при себе. Поэтому прежнее имя переживает перезагрузку
+// в настройках, а снимаем мы его топики здесь, когда завещание давно
+// отработало.
+//
+// Заодно это чинит случай, когда в момент переименования MQTT был недоступен:
+// уборка просто произойдёт при следующем подключении.
+void mqttClearPreviousName(){
+  String prev = settings::getStringValue(keys::mqtt::prevName);
+  if (!prev.length()) return;
+
+  // Санация имён могла схлопнуть разные имена в один топик -- тогда снимать
+  // нечего, мы бы стёрли собственные свежие сообщения.
+  if (topicFor(prev, "config") != getDiscoveryTopic())
+    mqttClearRetainedFor(prev);
+
+  settings::setString(keys::mqtt::prevName, "");
+  settings::commit();
+}
+
+
 void onConnectionEstablished() {
   println("MQTT server is connected");
   SendDiscoveryMessage();
@@ -166,6 +226,18 @@ void onConnectionEstablished() {
   // сообщения -- десять секунд карточки, которая не знает, включено ли реле.
   publishState();
   SendAvailableMessage("online");
+
+  // Уборка за переименованием откладывается, а не делается здесь. Брокер
+  // объявляет прежнюю сессию мёртвой не сразу, а по истечении keep-alive с
+  // половиной сверху (15 с у PubSubClient, то есть около 22 с), и только
+  // тогда публикует завещание в старый avaible. Уберись мы прямо сейчас --
+  // завещание пришло бы следом и вернуло мусор. Проверено на железе: ровно
+  // так и происходило.
+  if (settings::getStringValue(keys::mqtt::prevName).length()){
+    CleanupTimer.setTimerMode();
+    CleanupTimer.setTime(30000);
+    CleanupTimer.start();
+  }
 
   mqttClient.subscribe(getCommandTopic(), [] (const String &payload)  {
     println("MQTT received command topic");
@@ -261,6 +333,8 @@ void SendAvailableMessage(const String &mode = "online"){
 }
 
 
+
+
 void mqttPublish() {
   if (mqttClient.isConnected() && MessageTimer.tick()) {
     publishState();
@@ -268,5 +342,11 @@ void mqttPublish() {
 
   if (mqttClient.isConnected() && ServiceMessageTimer.tick()) {
     SendAvailableMessage();
+  }
+
+  // Одноразовый: запускается только после переименования, снимает топики
+  // прежнего имени и больше не взводится.
+  if (mqttClient.isConnected() && CleanupTimer.tick()) {
+    mqttClearPreviousName();
   }
 }

@@ -33,6 +33,12 @@ constexpr settings::Key password{"wifiPassword"};
 }  // namespace wifi
 
 namespace mqtt {
+// Имя, под которым устройство публиковалось до переименования. Живёт в
+// настройках ровно потому, что должно пережить перезагрузку: снять старые
+// retained-топики сразу нельзя -- перезагрузка рвёт соединение, и брокер по
+// завещанию кладёт в старый avaible "offline", возвращая только что убранное.
+// Пустое значение означает "нечего снимать".
+constexpr settings::Key prevName{"mqtt.prevName"};
 constexpr settings::Key host{"mqtt.host"};
 constexpr settings::Key port{"mqtt.port"};
 constexpr settings::Key username{"mqtt.username"};

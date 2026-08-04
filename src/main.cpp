@@ -46,13 +46,14 @@ struct Form{
 
 
 Form form;
-TimerMs MessageTimer, ServiceMessageTimer;
+TimerMs MessageTimer, ServiceMessageTimer, CleanupTimer;
 EspMQTTClient mqttClient;
 
 void publishState();
 void SendDiscoveryMessage();
 void SendAvailableMessage(const String &mode );
 void mqttPublish();
+void mqttClearRetained();
 void factoryReset();
 void mqttStart();
 void restart();

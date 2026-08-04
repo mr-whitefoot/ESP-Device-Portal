@@ -76,6 +76,8 @@ void settingsSetup(){
   settings::defineInt(keys::dev::timezone, TIMEZONE_UTC);
 
   settings::defineString(keys::mqtt::topicPrefix, "homeassistant");
+  // Пусто -- значит за переименованием убирать нечего.
+  settings::defineString(keys::mqtt::prevName, "");
   settings::defineInt(keys::mqtt::port, 1883);
   settings::defineInt(keys::mqtt::statusDelay, 10);
   settings::defineInt(keys::mqtt::availableDelay, 60);
@@ -135,6 +137,11 @@ void startup(){
 
 void factoryReset(){
   println("Factory reset");
+  // Прежде чем терять имя, снять с брокера всё, что под ним опубликовано:
+  // после сброса топики будут другими, и старые retained-сообщения остались бы
+  // у брокера навсегда -- вместе с сущностью в HomeAssistant, которая никогда
+  // не оживёт.
+  mqttClearRetained();
   settings::clear();
   restart();
 }
