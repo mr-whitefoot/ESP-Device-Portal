@@ -5,7 +5,7 @@ Import("env")
 # Имя устройства и версия приходят из окружения: одна кодовая база собирает
 # несколько устройств, и по имени bin-файла должно быть видно, какое именно.
 env.Replace(PROGNAME="ESP_%s_v%s" % (
-    env.GetProjectOption("device_name"),
+    env.GetProjectOption("custom_device_name"),
     env.GetProjectOption("release_version"),
 ))
 

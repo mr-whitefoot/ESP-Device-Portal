@@ -9,4 +9,3 @@ tools/broker.ini
 .vscode/ipch
 .vscode/*
 .DS_Store
-lib/.DS_Store
