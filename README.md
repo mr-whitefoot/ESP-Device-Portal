@@ -1,4 +1,4 @@
-# ESP-Relay-Portal
+# ESP-Device-Portal
 
 Прошивка для ESP-01/ESP-01s с web-порталом и интеграцией в HomeAssistant.
 
@@ -64,16 +64,16 @@
 
 ### Интерфейс web портала:
 Главный экран<br>
-<img width="430" alt="image" src="https://github.com/mr-whitefoot/ESP-Relay-Portal/assets/16363451/e40898e2-9f7a-4e93-8c04-41359ba0cad9">
+<img width="430" alt="image" src="https://github.com/mr-whitefoot/ESP-Device-Portal/assets/16363451/e40898e2-9f7a-4e93-8c04-41359ba0cad9">
 
 Поддержка таймеров<br>
 <img width="389" alt="main" src="https://user-images.githubusercontent.com/16363451/254378974-68468eab-a7b1-488c-91c0-90d5e21f072c.png">
 
 Выбор настроек<br>
-<img width="401" alt="image" src="https://github.com/mr-whitefoot/ESP-Relay-Portal/assets/16363451/f3f8e971-b77e-4998-bc1a-49f401978e52">
+<img width="401" alt="image" src="https://github.com/mr-whitefoot/ESP-Device-Portal/assets/16363451/f3f8e971-b77e-4998-bc1a-49f401978e52">
 
 Настройки реле<br>
-<img width="389" alt="image" src="https://github.com/mr-whitefoot/ESP-Relay-Portal/assets/16363451/b9f3134a-b1c5-464a-b94d-77f0ce899cd9">
+<img width="389" alt="image" src="https://github.com/mr-whitefoot/ESP-Device-Portal/assets/16363451/b9f3134a-b1c5-464a-b94d-77f0ce899cd9">
 
 Обновление прошивки по Wi-Fi<br>
 <img src="https://user-images.githubusercontent.com/16363451/197058992-d8bc1296-aa61-4ff9-ba36-1ad8a007244e.png" width="400">
@@ -101,7 +101,7 @@
 
 
 ### Обновление прошивки через портал:
-- Скачать [последнюю версию прошивки](https://github.com/mr-whitefoot/ESP-Relay-Portal-Arduino/releases/latest) либо собрать самостоятельно, см. ниже. В имени файла указаны устройство и версия: `ESP_Relay_v3.6.0.bin`, `ESP_DS18B20_v3.6.0.bin`;
+- Скачать [последнюю версию прошивки](https://github.com/mr-whitefoot/ESP-Device-Portal/releases/latest) либо собрать самостоятельно, см. ниже. В имени файла указаны устройство и версия: `ESP_Relay_v3.6.0.bin`, `ESP_DS18B20_v3.6.0.bin`;
 - Перейти на портале устройства Configuration -> Firmware upgrade;
 - Нажать кнопку OTA firmware;
 - Выбрать скачанный bin файл;
