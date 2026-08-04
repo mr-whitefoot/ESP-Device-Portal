@@ -1,4 +1,5 @@
-#include <EspMQTTClient.h>
+#include <ArduinoOTA.h>
+#include <mqtt_client.h>
 #include <ArduinoJson.h>
 #include <TimerMs.h>
 #include <GyverPortal.h>
@@ -47,7 +48,7 @@ struct Form{
 
 Form form;
 TimerMs MessageTimer, ServiceMessageTimer, CleanupTimer, RediscoverTimer;
-EspMQTTClient mqttClient;
+CoreMqttClient mqttClient;
 
 void publishState();
 void SendDiscoveryMessage();
@@ -56,6 +57,7 @@ void mqttPublish();
 void mqttClearRetained();
 void factoryReset();
 void mqttStart();
+void onConnectionEstablished();
 void restart();
 void restartRequest();
 void println(const String& text);
