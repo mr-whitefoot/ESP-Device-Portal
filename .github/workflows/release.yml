@@ -48,16 +48,16 @@ jobs:
           fi
           echo "version=$tag_version" >> "$GITHUB_ENV"
 
-      # Только устройства, а не диагностическая сборка esp01_relay_metrics:
+      # Только конечные образы, а не диагностическая сборка esp01_relay_metrics:
       # в релизе лежит то, что можно заливать на железо, и метрики loop() в
       # serial туда не относятся. При необходимости она собирается из CI.
       - name: Собрать прошивки
-        run: pio run -e esp01_relay -e esp01_ds18b20 2>&1 | tee build.log
+        run: pio run -e esp01_relay -e d1_mini_relay -e esp01_ds18b20 2>&1 | tee build.log
 
       - name: Сложить бинарники
         run: |
           mkdir dist
-          cp .pio/build/esp01_relay/*.bin .pio/build/esp01_ds18b20/*.bin dist/
+          cp .pio/build/esp01_relay/*.bin .pio/build/d1_mini_relay/*.bin .pio/build/esp01_ds18b20/*.bin dist/
           ls -l dist
 
       # Запас по OTA -- в тело релиза: по нему видно, сколько места осталось
