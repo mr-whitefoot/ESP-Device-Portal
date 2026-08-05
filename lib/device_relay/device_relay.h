@@ -146,7 +146,11 @@ void saveTimer(const int index, const bool buttonMode) {
 
 const char* model() { return "Relay"; }
 const char* haComponent() { return "switch"; }
-const char* updateIds() { return "switch"; }
+// В Button mode на главной вместо переключателя стоит кнопка, а обновлять в
+// ней нечего: импульс короче периода опроса и всё равно не был бы виден.
+const char* updateIds() {
+  return settings::getBool(keys::relay::buttonMode) ? "" : "switch";
+}
 
 // --- Жизненный цикл -------------------------------------------------------
 
@@ -199,11 +203,20 @@ void tick() {
 // --- Портал ---------------------------------------------------------------
 
 void buildHomeUi() {
+  // Switch обещает защёлку, которой в Button mode нет: включение живёт
+  // полсекунды и отпускается само, так что переключатель почти всё время
+  // показывал бы OFF и просил бы вернуть его вручную. Кнопка описывает ровно
+  // то, что происходит -- одно нажатие. Идёт она отдельной строкой под именем
+  // устройства: в строке с именем кнопка жалась к краю, а во всю ширину в неё
+  // проще попасть пальцем.
+  bool buttonMode = settings::getBool(keys::relay::buttonMode);
+
   GP.BLOCK_TAB_BEGIN("Control");
     GP.BOX_BEGIN(GP_EDGES);
       GP.LABEL( settings::getStringValue(keys::dev::name) );
-      GP.SWITCH("switch", detail::relay.GetState());
+      if (!buttonMode) GP.SWITCH("switch", detail::relay.GetState());
     GP.BOX_END();
+    if (buttonMode) GP.BUTTON("relayPush", "Push");
   GP.BLOCK_END();
 }
 
@@ -312,9 +325,13 @@ bool handleForm() {
 
 void handleClick() {
   if (portal.click("switch")) detail::relay.SetState( portal.getCheck("switch") );
+  // Кнопка состояния не несёт: нажатие всегда значит "включить", а отпустит
+  // выход сам ESPRelay через BUTTON_PRESS_MS.
+  if (portal.click("relayPush")) detail::relay.SetState(true);
 }
 
 void updateUi() {
+  if (settings::getBool(keys::relay::buttonMode)) return;
   portal.updateInt("switch", detail::relay.GetState());
 }
 
