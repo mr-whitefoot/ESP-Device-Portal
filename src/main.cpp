@@ -81,10 +81,12 @@ void restartRequest(const char* reason);
 // не тем устройством прошивка молча уедет на железку и щёлкнет чем попало.
 #if defined(DEVICE_RELAY)
   #include <device_relay.h>
+#elif defined(DEVICE_RELAY_BANK)
+  #include <device_relay_bank.h>
 #elif defined(DEVICE_DS18B20)
   #include <device_ds18b20.h>
 #else
-  #error "Не выбрано устройство: соберите окружение с -D DEVICE_RELAY или -D DEVICE_DS18B20"
+  #error "Не выбрано устройство: нужен DEVICE_RELAY, DEVICE_RELAY_BANK или DEVICE_DS18B20"
 #endif
 
 

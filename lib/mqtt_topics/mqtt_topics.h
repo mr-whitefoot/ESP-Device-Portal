@@ -61,3 +61,15 @@ inline void buildUniqueId(uint32_t chipId, const char* component,
 
   snprintf(dst, dstSize, "%06x_%s", (unsigned)chipId, component);
 }
+
+// Вариант для нескольких сущностей одного компонента. Одноканальные прошивки
+// продолжают использовать buildUniqueId(), чтобы не сменить свои uniq_id в HA.
+inline void buildEntityUniqueId(uint32_t chipId, const char* component,
+                                const char* entityId, char* dst,
+                                size_t dstSize) {
+  if (dst == nullptr || dstSize == 0) return;
+  if (component == nullptr) component = "";
+  if (entityId == nullptr) entityId = "";
+
+  snprintf(dst, dstSize, "%06x_%s_%s", (unsigned)chipId, component, entityId);
+}

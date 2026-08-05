@@ -1,4 +1,6 @@
 #pragma once
+#include <stddef.h>
+#include <stdint.h>
 #include <ArduinoJson.h>
 
 // Контракт между ядром и конечным устройством.
@@ -23,6 +25,11 @@
 
 namespace device {
 
+// Жёсткий предел нужен MQTT-транспорту для статических таблиц без heap-массивов.
+// Он совпадает с максимальной конфигурацией этой кодовой базы -- банком из
+// восьми реле. Устройство обязано вернуть entityCount() в этом диапазоне.
+static const uint8_t MAX_ENTITIES = 8;
+
 // --- Описание -------------------------------------------------------------
 
 // Модель для карточки устройства в HomeAssistant, например "Relay".
@@ -31,6 +38,19 @@ const char* model();
 // Компонент HomeAssistant: "switch", "sensor", "binary_sensor".
 // Попадает в discovery-топик, поэтому только [a-zA-Z0-9_-].
 const char* haComponent();
+
+// Число независимых сущностей HomeAssistant внутри физического устройства.
+// Для прежних реле и датчика это 1, для релейного банка -- 8.
+uint8_t entityCount();
+
+// Стабильный идентификатор сущности внутри устройства, например "relay_1".
+// Не должен зависеть от пользовательской подписи: участвует в топиках и
+// unique_id. Для односущностных устройств ядро сохраняет прежнюю схему топиков.
+const char* entityId(uint8_t index);
+
+// Отображаемое имя сущности. Записывается в discovery и может меняться без
+// переезда MQTT-топиков. Буфер всегда должен завершаться нулём.
+void entityName(uint8_t index, char* buffer, size_t size);
 
 // Идентификаторы динамически обновляемых полей портала через запятую,
 // например "switch". Пустая строка, если обновлять нечего.
@@ -77,12 +97,12 @@ void updateUi();
 
 // Поля discovery, специфичные для устройства: cmd_t, val_tpl, dev_cla,
 // единицы измерения. Общая часть (имя, топики, карточка device) -- на ядре.
-void fillDiscovery(JsonDocument& doc);
+void fillDiscovery(uint8_t entity, JsonDocument& doc);
 
 // Полезная нагрузка состояния.
 void fillState(JsonDocument& doc);
 
 // Команда из командного топика. У датчика пустая.
-void onCommand(const String& payload);
+void onCommand(uint8_t entity, const String& payload);
 
 }  // namespace device

@@ -70,8 +70,17 @@ class CoreMqttClient {
 
   bool subscribe(const String& topic, MessageCallback callback,
                  uint8_t qos = 0) {
-    _subscriptionTopic = topic;
-    _messageCallback = callback;
+    int8_t slot = findSubscription(topic.c_str());
+    if (slot < 0) {
+      if (_subscriptionCount == MAX_SUBSCRIPTIONS) {
+        log('E', String(F("subscription table full topic=")) + topic);
+        return false;
+      }
+      slot = _subscriptionCount++;
+      _subscriptions[slot].topic = topic;
+    }
+    _subscriptions[slot].callback = callback;
+
     if (!isConnected()) return false;
     return _client.subscribe(topic.c_str(), qos) != 0;
   }
@@ -129,7 +138,13 @@ class CoreMqttClient {
   }
 
  private:
-  static const uint8_t MESSAGE_QUEUE_SIZE = 4;
+  static const uint8_t MAX_SUBSCRIPTIONS = 8;
+  static const uint8_t MESSAGE_QUEUE_SIZE = 8;
+
+  struct Subscription {
+    String topic;
+    MessageCallback callback;
+  };
 
   // Без колбэка сообщение теряется молча, и запасного вывода в Serial здесь
   // больше нет: он существовал под DEBUG_MQTT, а уровни сделали этот флаг
@@ -140,17 +155,21 @@ class CoreMqttClient {
 
   void receive(const char* topic, const uint8_t* payload, size_t len,
                size_t index, size_t total) {
-    if (!_messageCallback || _subscriptionTopic != topic) return;
+    int8_t subscription = findSubscription(topic);
+    if (subscription < 0 || !_subscriptions[subscription].callback) return;
 
     if (index == 0) {
       _incomingPayload = "";
       _incomingPayload.reserve(total);
+      _incomingSubscription = subscription;
     }
 
     // Фрагменты должны идти подряд. Повреждённую/неполную команду безопаснее
     // отбросить, чем склеить в другую и переключить реле не тем значением.
-    if (_incomingPayload.length() != index) {
+    if (_incomingPayload.length() != index ||
+        _incomingSubscription != subscription) {
       _incomingPayload = "";
+      _incomingSubscription = -1;
       return;
     }
 
@@ -160,13 +179,24 @@ class CoreMqttClient {
     if (_messageCount == MESSAGE_QUEUE_SIZE) {
       _messageOverflow = true;
       _incomingPayload = "";
+      _incomingSubscription = -1;
       return;
     }
 
     _messageQueue[_messageTail] = _incomingPayload;
+    _messageSubscriptions[_messageTail] = subscription;
     _messageTail = (_messageTail + 1) % MESSAGE_QUEUE_SIZE;
     ++_messageCount;
     _incomingPayload = "";
+    _incomingSubscription = -1;
+  }
+
+  int8_t findSubscription(const char* topic) const {
+    if (topic == nullptr) return -1;
+    for (uint8_t i = 0; i < _subscriptionCount; i++) {
+      if (_subscriptions[i].topic == topic) return static_cast<int8_t>(i);
+    }
+    return -1;
   }
 
   void dispatchMessages() {
@@ -178,12 +208,16 @@ class CoreMqttClient {
       log('E', F("command queue overflow"));
     }
 
-    while (_messageCount && _messageCallback) {
+    while (_messageCount) {
       String payload = _messageQueue[_messageHead];
+      uint8_t subscription = _messageSubscriptions[_messageHead];
       _messageQueue[_messageHead] = "";
       _messageHead = (_messageHead + 1) % MESSAGE_QUEUE_SIZE;
       --_messageCount;
-      _messageCallback(payload);
+
+      if (subscription < _subscriptionCount &&
+          _subscriptions[subscription].callback)
+        _subscriptions[subscription].callback(payload);
     }
   }
 
@@ -191,10 +225,12 @@ class CoreMqttClient {
   MqttReconnect _reconnect;
   ConnectionCallback _connectionCallback;
   LogCallback _logCallback;
-  MessageCallback _messageCallback;
-  String _subscriptionTopic;
+  Subscription _subscriptions[MAX_SUBSCRIPTIONS];
+  uint8_t _subscriptionCount = 0;
   String _incomingPayload;
+  int8_t _incomingSubscription = -1;
   String _messageQueue[MESSAGE_QUEUE_SIZE];
+  uint8_t _messageSubscriptions[MESSAGE_QUEUE_SIZE] = {};
   uint8_t _messageHead = 0;
   uint8_t _messageTail = 0;
   uint8_t _messageCount = 0;

@@ -148,6 +148,11 @@ void saveTimer(const int index, const bool buttonMode) {
 
 const char* model() { return "Relay"; }
 const char* haComponent() { return "switch"; }
+uint8_t entityCount() { return 1; }
+const char* entityId(uint8_t index) { return "switch"; }
+void entityName(uint8_t index, char* buffer, size_t size) {
+  settings::getString(keys::dev::name, buffer, size);
+}
 // В Button mode на главной вместо переключателя стоит кнопка, а обновлять в
 // ней нечего: импульс короче периода опроса и всё равно не был бы виден.
 const char* updateIds() {
@@ -339,13 +344,13 @@ void updateUi() {
 
 // --- MQTT -----------------------------------------------------------------
 
-void fillDiscovery(JsonDocument& doc) {
+void fillDiscovery(uint8_t entity, JsonDocument& doc) {
   // Явные строки вместо булевых значений: раньше здесь лежали JSON true/false,
   // и работало это лишь по совпадению -- HomeAssistant приводит их к строкам
   // "True"/"False" ровно так же, как Jinja рендерит булево в шаблоне.
   doc["stat_on"]  = "ON";
   doc["stat_off"] = "OFF";
-  doc["cmd_t"]    = getCommandTopic();
+  doc["cmd_t"]    = getCommandTopic(entity);
   doc["pl_on"]    = "ON";
   doc["pl_off"]   = "OFF";
   doc["dev_cla"]  = "switch";
@@ -356,7 +361,7 @@ void fillState(JsonDocument& doc) {
   doc["switch"] = detail::relay.GetState();
 }
 
-void onCommand(const String& payload) {
+void onCommand(uint8_t entity, const String& payload) {
   // Нераспознанная команда не должна дёргать нагрузку, поэтому запасной
   // вариант -- текущее состояние.
   detail::relay.SetState( parseSwitchPayload(payload.c_str(), detail::relay.GetState()) );

@@ -10,10 +10,13 @@ struct MQTTConnection {
 };
 
 struct MQTTTopic{
-  String discovery;
-  String command;
   String available;
   String state;
+};
+
+struct MQTTEntityTopic{
+  String discovery;
+  String command;
 };
 
 // Лист топика доступности до 3.6.0. Опечатка жила в именах топиков с самого
@@ -25,6 +28,8 @@ static const char* LEGACY_AVAILABLE_LEAF = "avaible";
 struct MQTTData{
   MQTTConnection connection;
   MQTTTopic topic;
+  MQTTEntityTopic entity[device::MAX_ENTITIES];
+  uint8_t entityCount;
   // Имя устройства, приведённое к допустимым в топике символам.
   // Отображаемое имя остаётся в connection.clientName как есть.
   String topicName;
@@ -66,25 +71,52 @@ String topicFor(const String& deviceName, const char* leaf){
 }
 
 
+// Discovery и команды нескольких сущностей получают дополнительный стабильный
+// сегмент. Для единственной сущности ветка намеренно возвращает прежний адрес,
+// чтобы обновление существующих устройств не создало дубликаты в HA.
+String topicForEntity(const String& deviceName, uint8_t entity, const char* leaf){
+  if (mqttData.entityCount <= 1) return topicFor(deviceName, leaf);
+
+  char safeName[64];
+  char safeEntity[32];
+  sanitizeTopicSegment(deviceName.c_str(), safeName, sizeof(safeName));
+  sanitizeTopicSegment(device::entityId(entity), safeEntity, sizeof(safeEntity));
+
+  return mqttData.connection.topicPrefix + "/" + device::haComponent() + "/" +
+         safeName + "/" + safeEntity + "/" + leaf;
+}
+
+
 void topicCreate(){
   char safeName[64];
   sanitizeTopicSegment(mqttData.connection.clientName.c_str(), safeName, sizeof(safeName));
   mqttData.topicName = safeName;
 
-  const String& deviceName = mqttData.connection.clientName;
+  mqttData.entityCount = device::entityCount();
+  if (mqttData.entityCount == 0 || mqttData.entityCount > device::MAX_ENTITIES) {
+    LOG_E(mqtt, String(F("invalid entity count=")) + mqttData.entityCount);
+    mqttData.entityCount = mqttData.entityCount == 0 ? 1 : device::MAX_ENTITIES;
+  }
 
-  mqttData.topic.discovery = topicFor(deviceName, "config");
+  const String& deviceName = mqttData.connection.clientName;
   mqttData.topic.available = topicFor(deviceName, "available");
   mqttData.topic.state = topicFor(deviceName, "state");
-  mqttData.topic.command = topicFor(deviceName, "set");
+  for (uint8_t i = 0; i < mqttData.entityCount; i++) {
+    mqttData.entity[i].discovery = topicForEntity(deviceName, i, "config");
+    mqttData.entity[i].command = topicForEntity(deviceName, i, "set");
+  }
 
   // Уровень D: топики строятся по одному правилу из имени устройства, и в
   // норме достаточно знать имя. Нужны они, когда HomeAssistant не видит
   // сущность, -- тогда сборка с -D LOG_LEVEL=4 показывает все четыре адреса.
-  LOG_D(mqtt, String(F("topic discovery=")) + mqttData.topic.discovery);
   LOG_D(mqtt, String(F("topic available=")) + mqttData.topic.available);
   LOG_D(mqtt, String(F("topic state=")) + mqttData.topic.state);
-  LOG_D(mqtt, String(F("topic command=")) + mqttData.topic.command);
+  for (uint8_t i = 0; i < mqttData.entityCount; i++) {
+    LOG_D(mqtt, String(F("topic discovery[")) + i + "]=" +
+                mqttData.entity[i].discovery);
+    LOG_D(mqtt, String(F("topic command[")) + i + "]=" +
+                mqttData.entity[i].command);
+  }
 }
 
 
@@ -114,13 +146,15 @@ void clientIdCreate(){
 // Возврат по ссылке, а не по значению: топики публикуются каждые 10 секунд,
 // и копия String на каждый вызов это лишняя аллокация в куче. Кроме того,
 // enableLastWillMessage() запоминает сырой указатель на буфер строки.
-const String& getDiscoveryTopic(){
-  return mqttData.topic.discovery;
+const String& getDiscoveryTopic(uint8_t entity = 0){
+  if (entity >= mqttData.entityCount) entity = 0;
+  return mqttData.entity[entity].discovery;
 }
 
 
-const String& getCommandTopic(){
-  return mqttData.topic.command;
+const String& getCommandTopic(uint8_t entity = 0){
+  if (entity >= mqttData.entityCount) entity = 0;
+  return mqttData.entity[entity].command;
 }
 
 
@@ -188,7 +222,8 @@ void mqttStart(){
 // висеть у брокера -- сущность, в которую больше никто никогда не опубликует.
 void mqttClearRetainedFor(const String& deviceName){
   LOG_I(mqtt, String(F("clearing retained name=")) + deviceName);
-  mqttClient.publish(topicFor(deviceName, "config"), "", true);
+  for (uint8_t i = 0; i < mqttData.entityCount; i++)
+    mqttClient.publish(topicForEntity(deviceName, i, "config"), "", true);
   mqttClient.publish(topicFor(deviceName, "state"), "", true);
   mqttClient.publish(topicFor(deviceName, "available"), "", true);
   // Топик с прежней опечаткой снимается и здесь. Устройство, которое
@@ -226,7 +261,7 @@ void mqttClearPreviousName(){
 
   // Санация имён могла схлопнуть разные имена в один топик -- тогда снимать
   // нечего, мы бы стёрли собственные свежие сообщения.
-  if (topicFor(prev, "config") != getDiscoveryTopic())
+  if (topicFor(prev, "state") != getStateTopic())
     mqttClearRetainedFor(prev);
 
   settings::setString(keys::mqtt::prevName, "");
@@ -260,7 +295,8 @@ void mqttAnnounce(){
 // Уберись мы сейчас, завещание вернуло бы мусор следом.
 void mqttRetirePreviousEntity(){
   LOG_I(mqtt, F("retiring previous entity after schema upgrade"));
-  mqttClient.publish(getDiscoveryTopic(), "", true);
+  for (uint8_t i = 0; i < mqttData.entityCount; i++)
+    mqttClient.publish(getDiscoveryTopic(i), "", true);
   mqttClient.loop();
 }
 
@@ -315,13 +351,17 @@ void onConnectionEstablished() {
   // логе стояло "received command topic", и по нему нельзя было отличить
   // команду, которую устройство не поняло, от команды, которую оно поняло и
   // выполнило не так, как ждал отправитель.
-  bool subscribed = mqttClient.subscribe(getCommandTopic(), [] (const String &payload)  {
-    LOG_I(mqtt, String(F("command ")) + payload);
-    device::onCommand(payload);
-  });
-  // Молча не подписавшееся устройство выглядит как исправное: состояние оно
-  // публикует, доступность тоже, и только команды до него не доходят.
-  if (!subscribed) LOG_W(mqtt, F("command subscribe failed"));
+  for (uint8_t i = 0; i < mqttData.entityCount; i++) {
+    bool subscribed = mqttClient.subscribe(
+        getCommandTopic(i), [i] (const String &payload) {
+          LOG_I(mqtt, String(F("command entity=")) + i + " " + payload);
+          device::onCommand(i, payload);
+        });
+    // Молча не подписавшееся устройство выглядит как исправное: состояние оно
+    // публикует, доступность тоже, и только команды до него не доходят.
+    if (!subscribed)
+      LOG_W(mqtt, String(F("command subscribe failed entity=")) + i);
+  }
 }
 
 
@@ -346,8 +386,8 @@ void publishState() {
 }
 
 
-void SendDiscoveryMessage( ){
-  LOG_D(mqtt, F("publish discovery"));
+void SendDiscoveryMessage(uint8_t entity){
+  LOG_D(mqtt, String(F("publish discovery entity=")) + entity);
   // Раньше документ сериализовался в char[1024]. Полезная нагрузка с длинным
   // именем устройства подбиралась к этому пределу вплотную, а serializeJson
   // при нехватке места молча обрезает вывод -- в брокер уходил битый JSON.
@@ -355,21 +395,33 @@ void SendDiscoveryMessage( ){
   JsonDocument doc;
 
   String device_name = mqttData.connection.clientName;
+  char displayName[64];
+  device::entityName(entity, displayName, sizeof(displayName));
 
   // uniq_id -- на сущность, а не на устройство: раньше здесь было голое
   // число chipId, общее для всего, что живёт на этом чипе. Разбор в
   // buildUniqueId().
-  char uniqueId[40];
-  buildUniqueId(ESP.getChipId(), device::haComponent(), uniqueId, sizeof(uniqueId));
+  char uniqueId[64];
+  if (mqttData.entityCount == 1)
+    buildUniqueId(ESP.getChipId(), device::haComponent(), uniqueId, sizeof(uniqueId));
+  else
+    buildEntityUniqueId(ESP.getChipId(), device::haComponent(),
+                        device::entityId(entity), uniqueId, sizeof(uniqueId));
 
-  doc["name"]         = device_name;
+  doc["name"]         = displayName;
   doc["uniq_id"]      = uniqueId;
   // object_id -- это подсказка HomeAssistant, каким сделать entity_id.
   // Раньше сюда уходило "ESP_" плюс имя плюс MAC с двоеточиями, и получалось
   // switch.esp_esp_relay_dc_4f_22_4d_21_97: нечитаемо, с удвоенным esp_esp
   // и MAC внутри -- ровно обратное тому, зачем object_id существует.
   // Санированное имя устройства даёт switch.esp_relay.
-  doc["object_id"]    = mqttData.topicName;
+  if (mqttData.entityCount == 1) {
+    doc["object_id"] = mqttData.topicName;
+  } else {
+    char safeEntity[32];
+    sanitizeTopicSegment(device::entityId(entity), safeEntity, sizeof(safeEntity));
+    doc["object_id"] = mqttData.topicName + "_" + safeEntity;
+  }
   // ip и mac на верхнем уровне убраны: в схеме HomeAssistant таких ключей
   // нет, discovery-схемы объявлены с extra=vol.REMOVE_EXTRA и молча их
   // выбрасывали. Адрес и так уходит в device.configuration_url, MAC --
@@ -384,7 +436,7 @@ void SendDiscoveryMessage( ){
 
   // Всё, что зависит от вида устройства -- команды, шаблон значения, класс,
   // единицы измерения -- добавляет само устройство.
-  device::fillDiscovery(doc);
+  device::fillDiscovery(entity, doc);
 
   JsonObject device = doc["device"].to<JsonObject>();
   device["name"] = device_name;
@@ -405,8 +457,15 @@ void SendDiscoveryMessage( ){
 
   // Сообщение крупное, и транспорт может не принять его, например при
   // нехватке памяти: без явной проверки автообнаружение отвалится беззвучно.
-  if (!mqttClient.publish(getDiscoveryTopic(), payload, true))
-    LOG_W(mqtt, String(F("discovery publish failed size=")) + payload.length());
+  if (!mqttClient.publish(getDiscoveryTopic(entity), payload, true))
+    LOG_W(mqtt, String(F("discovery publish failed entity=")) + entity +
+                F(" size=") + payload.length());
+}
+
+
+void SendDiscoveryMessage(){
+  for (uint8_t i = 0; i < mqttData.entityCount; i++)
+    SendDiscoveryMessage(i);
 }
 
 

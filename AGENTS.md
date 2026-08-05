@@ -19,8 +19,8 @@
 
 - Чистую логику проверять командой `pio test -e native`.
 - Изменения общего ядра проверять сборкой всех конечных образов:
-  `pio run -e esp01_relay`, `pio run -e d1_mini_relay` и
-  `pio run -e esp01_ds18b20`.
+  `pio run -e esp01_relay`, `pio run -e d1_mini_relay`,
+  `pio run -e esp07s_relay8` и `pio run -e esp01_ds18b20`.
 - Следить за строкой `OTA headroom` в выводе сборки. Успешная линковка без
   прохождения OTA-предела своей платы недостаточна для любого ESP8266.
 - Перед работой с железом использовать чек-листы из

@@ -134,6 +134,11 @@ String displayValue() {
 
 const char* model() { return "Temperature"; }
 const char* haComponent() { return "sensor"; }
+uint8_t entityCount() { return 1; }
+const char* entityId(uint8_t index) { return "sensor"; }
+void entityName(uint8_t index, char* buffer, size_t size) {
+  settings::getString(keys::dev::name, buffer, size);
+}
 const char* updateIds() { return "temperature"; }
 
 // --- Жизненный цикл -------------------------------------------------------
@@ -229,7 +234,7 @@ void updateUi() {
 
 // --- MQTT -----------------------------------------------------------------
 
-void fillDiscovery(JsonDocument& doc) {
+void fillDiscovery(uint8_t entity, JsonDocument& doc) {
   doc["dev_cla"]      = "temperature";
   doc["stat_cla"]     = "measurement";
   doc["unit_of_meas"] = detail::DEGREE_C;
@@ -247,6 +252,6 @@ void fillState(JsonDocument& doc) {
 }
 
 // Команд у датчика нет.
-void onCommand(const String& payload) {}
+void onCommand(uint8_t entity, const String& payload) {}
 
 }  // namespace device

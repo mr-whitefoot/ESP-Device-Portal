@@ -112,6 +112,22 @@ void test_unique_id_is_safe_with_tiny_buffer(void) {
   TEST_ASSERT_EQUAL('X', zero[0]);  // буфер не тронут
 }
 
+void test_multi_entity_unique_id_carries_stable_entity_id(void) {
+  char first[48], last[48];
+  buildEntityUniqueId(0x4d2197, "switch", "relay_1", first, sizeof(first));
+  buildEntityUniqueId(0x4d2197, "switch", "relay_8", last, sizeof(last));
+
+  TEST_ASSERT_EQUAL_STRING("4d2197_switch_relay_1", first);
+  TEST_ASSERT_EQUAL_STRING("4d2197_switch_relay_8", last);
+  TEST_ASSERT_NOT_EQUAL(0, strcmp(first, last));
+}
+
+void test_multi_entity_unique_id_handles_null_parts(void) {
+  char buf[32];
+  buildEntityUniqueId(0xabc, nullptr, nullptr, buf, sizeof(buf));
+  TEST_ASSERT_EQUAL_STRING("000abc__", buf);
+}
+
 int main(int argc, char** argv) {
   UNITY_BEGIN();
   RUN_TEST(test_default_device_name);
@@ -126,5 +142,7 @@ int main(int argc, char** argv) {
   RUN_TEST(test_unique_id_differs_between_entities_of_one_chip);
   RUN_TEST(test_unique_id_pads_chip_id);
   RUN_TEST(test_unique_id_is_safe_with_tiny_buffer);
+  RUN_TEST(test_multi_entity_unique_id_carries_stable_entity_id);
+  RUN_TEST(test_multi_entity_unique_id_handles_null_parts);
   return UNITY_END();
 }

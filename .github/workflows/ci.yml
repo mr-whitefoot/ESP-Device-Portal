@@ -46,6 +46,7 @@ jobs:
           - esp01_relay
           - esp01_relay_metrics
           - d1_mini_relay
+          - esp07s_relay8
           - esp01_ds18b20
     steps:
       - uses: actions/checkout@v7
