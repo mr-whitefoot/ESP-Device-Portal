@@ -11,7 +11,6 @@
 #include <core_contract.h>
 
 
-//#define DEBUG_MQTT
 //#define DEBUG_DB
 
 
@@ -59,13 +58,15 @@ void factoryReset();
 void mqttStart();
 void onConnectionEstablished();
 void restart();
-void restartRequest();
-void println(const String& text);
-void print(const String& text);
+void restartRequest(const char* reason);
 
 
 // Ядро сначала, устройство после: ядро зовёт device::*, объявленные в
 // контракте выше, а определения приходят с реализацией устройства.
+//
+// core_log.h первым: он пользуется glog, объявленным выше, а его макросами
+// пользуются все остальные.
+#include <core_log.h>
 #include <core_metrics.h>
 #include <core_wifi.h>
 // После core_wifi.h: адаптеру нужен WiFi.status(), а объявления сети приходят

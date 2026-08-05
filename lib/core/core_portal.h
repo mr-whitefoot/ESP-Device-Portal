@@ -503,15 +503,24 @@ void portalCheckForm(){
       if (pass.length() || !sameNetwork)
         settings::setString(keys::wifi::password, pass.c_str());
       settings::commit();
+      // Пароль в лог не попадает никогда, только факт его смены: лог
+      // отдаётся по HTTP любому, кто открыл /log.
+      LOG_I(web, String(F("wifi saved pass=")) +
+                 ((pass.length() || !sameNetwork) ? "new" : "kept") +
+                 F(" ssid=") + ssid);
       // Без перезагрузки: автомат сам попробует новые креды, а если они
       // не подойдут -- вернёт точку доступа.
       corewifi::credentialsChanged();
 
     // Factory reset
     } else if(portal.form(form.factoryReset)){
-      Serial.println("Factory reset");
+      // Раньше строка "Factory reset" печаталась до проверки галочки, то есть
+      // и тогда, когда сброса не было. Отказ теперь виден отдельно: страница
+      // о нём молчит, и без лога человек считает, что сброс состоялся.
       if(portal.getCheck("resetAllow"))
         factoryReset();
+      else
+        LOG_W(web, F("factory reset not confirmed, ignored"));
 
     // Preferences
     } else if(portal.form(form.preferences)){
@@ -526,13 +535,26 @@ void portalCheckForm(){
       String deviceName = portal.getString("deviceName");
       String prevName = settings::getStringValue(keys::dev::name);
       bool nameChanged = deviceName != prevName;
-      if (nameChanged) settings::setString(keys::mqtt::prevName, prevName.c_str());
+      if (nameChanged) {
+        // Переименование меняет топики MQTT, hostname и имя точки доступа
+        // разом, и следом идёт уборка за прежним именем в брокере. Из всех
+        // изменений настроек это самое заметное снаружи.
+        //
+        // Единственная строка с двумя значениями, где могут быть пробелы, --
+        // поэтому кавычки: правило "значение с пробелом ставится последним"
+        // тут не спасает, значений два.
+        LOG_I(web, String(F("renamed from=\"")) + prevName +
+                   F("\" to=\"") + deviceName + "\"");
+        settings::setString(keys::mqtt::prevName, prevName.c_str());
+      }
 
       settings::setString(keys::dev::name, deviceName.c_str());
 
       device::readSettingsForm();
 
       int32_t timezone = portal.getInt("timezone");
+      if (timezone != settings::getInt(keys::dev::timezone))
+        LOG_I(web, String(F("timezone offset=")) + tzOffsetSeconds(timezone) + "s");
       settings::setInt(keys::dev::timezone, timezone);
       corentp::setOffsetFromSettings(tzOffsetSeconds(timezone));
 
@@ -555,8 +577,10 @@ void portalCheckForm(){
                              (sameAuthUser && prevAuthPassword.length());
       bool authEnabled = requestedAuth && authUsername.length() && hasAuthPassword;
       settings::setBool(keys::portal::authEnabled, authEnabled);
+      // Просили закрыть портал, а он остался открытым: единственное место,
+      // где расходятся намерение и результат, и страница об этом не говорит.
       if (requestedAuth && !authEnabled)
-        println("Portal authorization needs username and password");
+        LOG_W(web, F("auth needs username and password, left off"));
 
       bool authChanged = authEnabled != prevAuthEnabled ||
                          authUsername != prevAuthUsername ||
@@ -564,9 +588,14 @@ void portalCheckForm(){
 
       settings::commit();
 
+      if (authChanged)
+        LOG_I(web, String(F("auth=")) + (authEnabled ? "on" : "off") +
+                   F(" user=") + authUsername);
+
       // GyverPortal хранит указатели на учётные данные, поэтому смена режима
       // или credentials применяется после безопасной отложенной перезагрузки.
-      if (nameChanged || authChanged) restartRequest();
+      if (nameChanged || authChanged)
+        restartRequest(nameChanged ? "device renamed" : "portal auth changed");
 
       //MQTT Config
     } else if(portal.form(form.mqttConfig)){
@@ -589,7 +618,12 @@ void portalCheckForm(){
       settings::setInt(keys::mqtt::statusDelay, portal.getInt("status_delay"));
       settings::setString(keys::mqtt::topicPrefix, portal.getString("topicPrefix").c_str());
 
-      restartRequest();
+      LOG_I(web, String(F("mqtt saved broker=")) +
+                 settings::getStringValue(keys::mqtt::host) + ":" +
+                 settings::getInt(keys::mqtt::port) +
+                 F(" pass=") + ((mqttPassword.length() || !sameUser) ? "new" : "kept"));
+
+      restartRequest("mqtt settings changed");
 
     } else {
       device::handleForm();
@@ -621,9 +655,9 @@ void portalAction(){
   if (portal.click()){
     // Имя элемента, а не голый факт клика: щелчки реле приходили и тогда,
     // когда никто ничего не нажимал, а по одному "Portal click" источник не
-    // отличить. println вместо Serial.println -- чтобы строка попадала и в
-    // лог портала, то есть была видна без подключения к serial.
-    println("Portal click: " + portal.clickName());
+    // отличить. Строка идёт в общий лог, а не в Serial, чтобы быть видной
+    // без подключения консоли.
+    LOG_I(web, String(F("click ")) + portal.clickName());
 
     device::handleClick();
     // Через заказ, хотя именно здесь можно было и напрямую: клику GyverPortal
@@ -631,13 +665,20 @@ void portalAction(){
     // от формы, чей ответ собирается после (portal.h:223). То есть кнопка
     // Reboot и не висла. Но единственная дорога к перезагрузке надёжнее двух:
     // разница между этими путями видна только в исходниках библиотеки.
-    if (portal.click("rebootButton")){ restartRequest(); }
+    if (portal.click("rebootButton")){ restartRequest("portal button"); }
   }
 }
 
 
 //Custom OTA page
 void OTAbuild(bool UpdateEnd, const String& UpdateError) {
+  // Обновление через портал -- второй путь прошивки помимо espota, и до сих
+  // пор он не писал в лог ничего: неудачную попытку видел только тот, кто
+  // стоял у браузера. Успех отдельной строкой не отмечается -- о нём скажет
+  // загрузочный баннер новой версии.
+  if (UpdateEnd && UpdateError.length())
+    LOG_E(ota, String(F("web update failed: ")) + UpdateError);
+
   GP.BUILD_BEGIN(400);
     GP.THEME(GP_DARK);
     GP.PAGE_TITLE(F("Firmware upgrade"));

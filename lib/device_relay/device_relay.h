@@ -43,14 +43,17 @@ void timersLoad() {
 }
 
 void onRelayChanged() {
-  println("Change relay state triggered");
+  bool state = relay.GetState();
+
+  // Новое положение, а не сам факт смены: строка "Change relay state
+  // triggered" не отвечала на единственный вопрос, ради которого её читают --
+  // включено сейчас или выключено.
+  LOG_I(dev, String(F("relay state=")) + (state ? "on" : "off"));
 
   // В Button mode состояния ON живут всего полсекунды. Сохранять каждую
   // пару ON/OFF во флеш бессмысленно и вредно для его ресурса.
   if (settings::getBool(keys::relay::saveState) &&
       !settings::getBool(keys::relay::buttonMode)) {
-    bool state = relay.GetState();
-
     // Пишем сразу, а не откладываем до settings::tick(). Отложенная запись
     // экономила ресурс флеша, но GyverDBFile сбрасывает файл только через
     // 10 секунд после изменения, и снятие питания в этом окне теряло
@@ -88,7 +91,12 @@ void scheduleHandle() {
   for (uint8_t i = 0; i < TIMER_COUNT; i++) {
     if (!(due & (1UL << i))) continue;
 
-    println("Timer " + String(i) + " activating");
+    // Действие в строке: у таймера три исхода, и по одному номеру нельзя
+    // сказать, ждали ли от него включения. Заодно видно расхождение с
+    // Button mode, где кэш подменяет действие на ON.
+    LOG_I(dev, String(F("timer ")) + i + F(" fired action=") +
+               (timers.timer[i].action == TIMER_ACTION_ON    ? "on"  :
+                timers.timer[i].action == TIMER_ACTION_OFF   ? "off" : "toggle"));
     switch (timers.timer[i].action) {
       case TIMER_ACTION_ON:     relay.SetState(true);  break;
       case TIMER_ACTION_OFF:    relay.SetState(false); break;
@@ -164,7 +172,13 @@ void begin() {
   bool restored = !buttonMode &&
                   settings::getBool(keys::relay::saveState) &&
                   settings::getBool(keys::relay::state);
-  if (restored) println("Restore relay state: on");
+  // Режимы реле разом: они определяют и полярность выхода, и то, щёлкнет ли
+  // реле на загрузке. Разбираться, почему устройство поднялось включённым,
+  // приходится именно по этим трём значениям.
+  LOG_I(dev, String(F("relay init invert=")) +
+             (settings::getBool(keys::relay::invert) ? "on" : "off") +
+             F(" button=") + (buttonMode ? "on" : "off") +
+             F(" state=") + (restored ? "on" : "off"));
 
   detail::relay.begin(RELAY_PIN, settings::getBool(keys::relay::invert),
                       restored, buttonMode);
@@ -172,7 +186,6 @@ void begin() {
 
   detail::timersLoad();
 
-  println("Starting timers handler");
   detail::scheduleTick.setTime(1000);
   detail::scheduleTick.attach(detail::scheduleHandle);
   detail::scheduleTick.start();
@@ -259,10 +272,19 @@ void buildSettingsUi() {
 
 void readSettingsForm() {
   bool invert = portal.getCheck("relayInvertMode");
+  bool buttonMode = portal.getCheck("relayButtonMode");
+
+  // Сравнение до записи, и одной строкой на оба режима: они меняют поведение
+  // выхода, а не отображение, и «реле стало щёлкать наоборот» разбирается
+  // именно по моменту, когда режим переключили.
+  if (invert != settings::getBool(keys::relay::invert) ||
+      buttonMode != settings::getBool(keys::relay::buttonMode))
+    LOG_I(dev, String(F("relay mode invert=")) + (invert ? "on" : "off") +
+               F(" button=") + (buttonMode ? "on" : "off"));
+
   settings::setBool(keys::relay::invert, invert);
   detail::relay.SetInvertMode(invert);
 
-  bool buttonMode = portal.getCheck("relayButtonMode");
   settings::setBool(keys::relay::buttonMode, buttonMode);
   // Старое сохранённое ON не должно внезапно восстановиться, если Button
   // mode позднее выключат и перезагрузят устройство до новой команды.

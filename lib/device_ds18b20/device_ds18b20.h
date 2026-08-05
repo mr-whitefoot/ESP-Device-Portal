@@ -56,7 +56,11 @@ bool converting = false;
 uint32_t requestedAt = 0;
 
 // Чтобы отсутствующий датчик не писал в лог одно и то же каждые 10 секунд.
+// Считаем при этом все неудачи подряд: одиночный сбой чтения на длинной линии
+// -- дело обычное, а сотня подряд означает оторванный датчик, и различает их
+// только счётчик. Печатается он при восстановлении, когда уже известен.
 bool lastReadOk = true;
+uint16_t failStreak = 0;
 
 void readTimerSetup() {
   int32_t period = settings::getInt(keys::sensor::refresh);
@@ -80,11 +84,15 @@ void sensorSetup() {
   sensor.setResolution(SENSOR_RESOLUTION);
 }
 
-void readFailed(const String& reason) {
-  if (lastReadOk) {
-    println("Sensor read failed: " + reason);
-    lastReadOk = false;
-  }
+void readFailed(float value) {
+  if (failStreak < 0xFFFF) failStreak++;
+  if (!lastReadOk) return;
+
+  // Отвергнутое значение целиком: библиотека отдаёт ошибки обычными числами
+  // (-127 обрыв линии, -128 ошибка CRC), и по ним отличается оторванный
+  // датчик от наводки на линии.
+  LOG_W(dev, String(F("sensor read failed value=")) + String(value, 1));
+  lastReadOk = false;
 }
 
 void startRead() {
@@ -98,7 +106,7 @@ void finishRead() {
 
   float value = sensor.getTempC();
   if (!filter.add(value)) {
-    readFailed(String(value, 1));
+    readFailed(value);
     return;
   }
 
@@ -107,8 +115,10 @@ void finishRead() {
   // в отличие от попыток вслепую каждый цикл.
   if (!sensorReady) sensorSetup();
 
-  if (!lastReadOk) println("Sensor read recovered");
+  if (!lastReadOk)
+    LOG_I(dev, String(F("sensor read recovered failed=")) + failStreak);
   lastReadOk = true;
+  failStreak = 0;
 }
 
 // Показание для портала. Пока достоверных чтений нет, показывать нечего:
@@ -134,13 +144,17 @@ void defineSettings() {
 }
 
 void begin() {
-  println("Initialize DS18B20 sensor");
-
   // Шину подтягивает внешний резистор, ножка контроллера остаётся входом.
   pinMode(ONE_WIRE_BUS, INPUT);
 
   detail::sensorSetup();
-  if (!detail::sensorReady) println("DS18B20 not found on the bus");
+  LOG_I(dev, String(F("ds18b20 init bus=")) + ONE_WIRE_BUS +
+             F(" period=") + settings::getInt(keys::sensor::refresh) + "s");
+
+  // Не ошибка: датчик, подключённый после загрузки, подхватится первым же
+  // удачным чтением. Но пустая карточка в HomeAssistant объясняется именно
+  // этой строкой.
+  if (!detail::sensorReady) LOG_W(dev, F("ds18b20 not found on the bus"));
 
   detail::readTimerSetup();
 
@@ -195,6 +209,8 @@ void readSettingsForm() {
 
   int32_t refresh = portal.getInt("sensorRefresh");
   if (refresh < 1) refresh = 1;
+  if (refresh != settings::getInt(keys::sensor::refresh))
+    LOG_I(dev, String(F("sensor period=")) + refresh + "s");
   settings::setInt(keys::sensor::refresh, refresh);
 
   detail::readTimerSetup();

@@ -14,7 +14,8 @@
 // на fillState/onCommand, а не на buildHomeUi.
 //
 // Ядро, в свою очередь, предоставляет устройству:
-//   println(text)      -- лог в Serial и в портал
+//   LOG_E/W/I/D(dev, text) -- лог в Serial и в портал; тег dev общий для всех
+//                             устройств, формат строки -- в core_log.h
 //   publishState()     -- опубликовать состояние в MQTT прямо сейчас
 //   restart()          -- завершение работы и перезагрузка ESP
 //   portal, form       -- объекты GyverPortal для разбора своих форм

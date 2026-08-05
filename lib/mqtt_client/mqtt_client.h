@@ -15,7 +15,10 @@
 class CoreMqttClient {
  public:
   using ConnectionCallback = std::function<void()>;
-  using LogCallback = std::function<void(const String&)>;
+  // Уровень приходит буквой ('E', 'W', 'I', 'D'): адаптеру транспорта незачем
+  // знать про перечисление уровней приложения, а классифицировать свои
+  // сообщения он обязан сам -- по тексту снаружи их не различить.
+  using LogCallback = std::function<void(char level, const String&)>;
   using MessageCallback = std::function<void(const String&)>;
 
   CoreMqttClient() {
@@ -48,8 +51,6 @@ class CoreMqttClient {
                              bool retain) {
     _client.setWill(topic, 0, retain, message);
   }
-
-  void enableDebuggingMessages(bool enabled = true) { _debug = enabled; }
 
   void setOnConnectionEstablishedCallback(ConnectionCallback callback) {
     _connectionCallback = callback;
@@ -94,8 +95,11 @@ class CoreMqttClient {
     if (_disconnectedPending) {
       _disconnectedPending = false;
       _reconnect.onDisconnected(now, wifiConnected);
-      log("MQTT disconnected, reason " +
-          String(static_cast<uint8_t>(_disconnectReason)));
+      // Код причины, а не расшифровка: таблица имён AsyncMqttClientDisconnectReason
+      // стоила бы флеша больше, чем экономит времени, а значений всего восемь
+      // и они перечислены в заголовке библиотеки.
+      log('W', String(F("disconnected reason=")) +
+               static_cast<uint8_t>(_disconnectReason));
     }
 
     if (_connectedPending) {
@@ -107,13 +111,13 @@ class CoreMqttClient {
 
     switch (_reconnect.tick(now, wifiConnected, _client.connected())) {
       case MqttReconnectAction::Connect:
-        log("MQTT connecting");
+        log('I', F("connecting"));
         _client.connect();
         break;
 
       case MqttReconnectAction::Disconnect:
         // Только TCP/MQTT. WiFi API здесь намеренно не вызывается.
-        if (wifiConnected) log("MQTT connection attempt timed out");
+        if (wifiConnected) log('W', F("connect timeout"));
         _client.disconnect(true);
         break;
 
@@ -127,12 +131,11 @@ class CoreMqttClient {
  private:
   static const uint8_t MESSAGE_QUEUE_SIZE = 4;
 
-  void log(const String& text) {
-    if (_logCallback) {
-      _logCallback(text);
-    } else if (_debug) {
-      Serial.println(text);
-    }
+  // Без колбэка сообщение теряется молча, и запасного вывода в Serial здесь
+  // больше нет: он существовал под DEBUG_MQTT, а уровни сделали этот флаг
+  // ненужным -- всё, что печаталось только под ним, теперь живёт на уровне D.
+  void log(char level, const String& text) {
+    if (_logCallback) _logCallback(level, text);
   }
 
   void receive(const char* topic, const uint8_t* payload, size_t len,
@@ -170,8 +173,9 @@ class CoreMqttClient {
     if (_messageOverflow) {
       _messageOverflow = false;
       // Это аварийный предел: HomeAssistant присылает одну короткую команду
-      // на действие. В serial сообщение остаётся даже без DEBUG_MQTT.
-      Serial.println("MQTT command queue overflow");
+      // на действие. Уровень E -- очередь переполняется только если команды
+      // идут быстрее, чем их разбирает loop(), и часть их уже потеряна.
+      log('E', F("command queue overflow"));
     }
 
     while (_messageCount && _messageCallback) {
@@ -198,7 +202,6 @@ class CoreMqttClient {
   bool _connectedPending = false;
   bool _disconnectedPending = false;
   bool _insideLoop = false;
-  bool _debug = false;
   AsyncMqttClientDisconnectReason _disconnectReason =
       AsyncMqttClientDisconnectReason::TCP_DISCONNECTED;
 };

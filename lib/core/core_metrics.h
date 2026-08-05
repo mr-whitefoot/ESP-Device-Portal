@@ -56,28 +56,25 @@ inline void account(uint8_t id, uint32_t us) {
   if (us > stageWorstUs[id]) stageWorstUs[id] = us;
 }
 
-// Спокойное окно уходит только в Serial: таких окон большинство, а кольцевой
-// буфер портала держит всего 1000 байт и был бы вытеснен ими целиком.
+// Спокойное окно уходит только в Serial (toPortal=false): таких окон
+// большинство, а кольцевой буфер портала держит всего 1000 байт и был бы
+// вытеснен ими целиком.
 //
-// Окно с просадкой идёт ещё и в лог портала -- println пишет в оба места.
-// Это делает диагностику доступной по HTTP, без подключения к serial: таких
-// строк примерно одна на десять секунд, и буфер их выдерживает. Ради этого
-// сборка и сделана отдельной: в обычной прошивке ничего этого нет.
+// Окно с просадкой идёт в оба места. Это делает диагностику доступной по
+// HTTP, без подключения к serial: таких строк примерно одна на десять секунд,
+// и буфер их выдерживает. Ради этого сборка и сделана отдельной: в обычной
+// прошивке ничего этого нет.
 inline void report(bool loud) {
-  if (!loud) {
-    Serial.print("[metric] iters=");
-    Serial.print(iterations);
-    Serial.print(" worstLoop=");
-    Serial.print(worstLoopUs);
-    Serial.println("us");
-    return;
-  }
-
-  String line = "[metric] iters=";
+  String line = "iters=";
   line += iterations;
-  line += " worstLoop=";
+  line += " worst=";
   line += worstLoopUs;
   line += "us";
+
+  if (!loud) {
+    corelog::write(LOG_LEVEL_INFO, corelog::tag::loop, line, false);
+    return;
+  }
 
   // Печатается только то, что реально отняло время: этап, простоявший ноль,
   // в строке лишь мешает глазами искать виновника.
@@ -89,7 +86,7 @@ inline void report(bool loud) {
     line += stageWorstUs[i];
   }
 
-  println(line);
+  LOG_I(loop, line);
 }
 
 // Разность беззнаковых величин верна и через переполнение micros() (каждые

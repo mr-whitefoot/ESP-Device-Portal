@@ -69,7 +69,10 @@ inline void startAttempt() {
   // портал при этом не перезапускается и captive не теряется.
   bool keepAp = machine.apUp() && WiFi.softAPgetStationNum() > 0;
 
-  println("WiFi connecting to " + name + (keepAp ? " (AP busy, staying AP_STA)" : ""));
+  // SSID последним: в нём бывают пробелы, и разбор строки по полям от этого
+  // не должен ломаться.
+  LOG_I(wifi, String(F("connecting mode=")) + (keepAp ? "AP_STA" : "STA") +
+              F(" ssid=") + name);
 
   WiFi.mode(keepAp ? WIFI_AP_STA : WIFI_STA);
   WiFi.hostname(settings::getStringValue(keys::dev::name));
@@ -77,8 +80,6 @@ inline void startAttempt() {
 }
 
 inline void openAp() {
-  println("Starting AP " + apName);
-
   // Портал перезапускается намеренно: признак captive portal защёлкивается
   // внутри start() и только при режиме ровно WIFI_AP. Если портал ещё не
   // поднят, перезапускать нечего -- portalStart() сам увидит нужный режим.
@@ -88,19 +89,22 @@ inline void openAp() {
   WiFi.mode(WIFI_AP);
   WiFi.softAP(apName);
 
-  println("AP IP address: " + WiFi.softAPIP().toString());
+  // Адрес и имя точки одной строкой: раздельными они всё равно читались
+  // только вместе, а в кольцевом буфере портала занимали вдвое больше места.
+  LOG_I(wifi, String(F("ap up ip=")) + WiFi.softAPIP().toString() +
+              F(" name=") + apName);
   if (portalReady) portal.start(portalName.c_str());
 }
 
 inline void stopAttempt() {
-  println("WiFi attempt failed, staying in AP");
+  LOG_W(wifi, F("connect failed, staying in ap"));
   // Точка уже поднята, портал трогать нельзя -- иначе слетит captive portal.
   WiFi.disconnect();
   WiFi.mode(WIFI_AP);
 }
 
 inline void closeAp() {
-  println("WiFi connected, closing AP");
+  LOG_I(wifi, F("ap down"));
 
   // Один переход режима вместо двух. Здесь стоял ещё и softAPdisconnect(true),
   // а он внутри делает enableAP(false) -- ту же самую смену opmode
@@ -110,12 +114,13 @@ inline void closeAp() {
 
   // Перезапуск нужен, чтобы портал отпустил DNS: в режиме AP он поднимает
   // wildcard-резолвер на 53 порту, и в сети роутера такой сосед лишний.
+  // Адрес здесь больше не печатается: его отдаёт строка о переходе в
+  // Connected, и она приходит на любом пути подключения, а не только через
+  // закрытие точки доступа.
   if (portalReady) {
     portal.stop();
     portal.start(portalName.c_str());
   }
-
-  println("IP: " + WiFi.localIP().toString());
 }
 
 inline void apply(WifiAction action) {
@@ -128,10 +133,31 @@ inline void apply(WifiAction action) {
   }
 }
 
-inline void begin(const String& deviceName) {
-  println("-----------------------------");
-  println("Initialize WiFi");
+// Прогон автомата с логом переходов.
+//
+// Логировать приходится здесь, а не в действиях: удачное подключение
+// действия не порождает вовсе (_enterConnected возвращает None), и в
+// обычной загрузке -- когда точка доступа не поднималась -- в логе не
+// оставалось ни строки о том, что устройство в сети. Адрес печатал только
+// closeAp(), то есть путь через точку доступа. Уход связи не печатал никто:
+// он виден был лишь по внезапной строке "connecting" через десять секунд.
+inline void applyTick(uint32_t now) {
+  WifiState before = machine.state();
+  apply(machine.tick(now, inputs()));
+  WifiState after = machine.state();
+  if (after == before) return;
 
+  if (after == WifiState::Connected) {
+    LOG_I(wifi, String(F("connected ip=")) + WiFi.localIP().toString() +
+                F(" rssi=") + WiFi.RSSI());
+  } else if (before == WifiState::Connected) {
+    // Не сама пропажа несущей, а признание разрыва: автомат держит выдержку
+    // WIFI_LOST_GRACE_MS, и строка означает, что связь не вернулась за неё.
+    LOG_W(wifi, F("link lost"));
+  }
+}
+
+inline void begin(const String& deviceName) {
   apName = deviceName + " AP";
   portalName = deviceName;
 
@@ -155,7 +181,7 @@ inline void begin(const String& deviceName) {
   // блокирует: ни повторы, ни возврат в точку доступа, ни новые креды.
   while (machine.state() == WifiState::Connecting) {
     delay(50);
-    apply(machine.tick(millis(), inputs()));
+    applyTick(millis());
   }
 }
 
@@ -163,7 +189,7 @@ inline void begin(const String& deviceName) {
 inline void portalStarted() { portalReady = true; }
 
 inline void tick() {
-  apply(machine.tick(millis(), inputs()));
+  applyTick(millis());
 }
 
 // Пользователь сохранил новые креды. Ничего не выполняем прямо здесь: вызов

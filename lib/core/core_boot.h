@@ -11,20 +11,7 @@ String portalAuthUsername;
 String portalAuthPassword;
 
 
-void println(const String& text){
-  Serial.println(text);
-  glog.println(text);
-}
-
-
-void print(const String& text){
-  Serial.print(text);
-  glog.print(text);
-}
-
-
 void portalStart(){
-  println("Starting portal");
   portal.attachBuild(portalBuild);
 
   portalAuthUsername = settings::getStringValue(keys::portal::username);
@@ -51,6 +38,8 @@ void portalStart(){
   else
     portal.enableOTA();
   corewifi::portalStarted();
+
+  LOG_I(web, String(F("portal up auth=")) + (portalAuthEnabled ? "on" : "off"));
 }
 
 
@@ -78,7 +67,7 @@ void settingsMigrate(){
     // Либо чистое устройство, либо прошивка до 3.1.0, где ключи назывались
     // иначе. Во втором случае старые ячейки всё равно недостижимы, и оставлять
     // их значит вечно носить около трёхсот байт мусора в файле базы.
-    println("Settings schema 0: starting fresh");
+    LOG_I(set, F("schema=0 starting fresh"));
     settings::clear();
   }
 
@@ -91,7 +80,7 @@ void settingsMigrate(){
     // Свежему устройству это не нужно, поэтому ветка отдельная от нулевой:
     // снимать там нечего, а лишний пустой config означал бы три секунды
     // задержки автообнаружения на ровном месте.
-    println("Settings schema 1 -> 2: entity will be re-announced");
+    LOG_I(set, F("schema=1 to=2 entity will be re-announced"));
     settings::defineBool(keys::mqtt::rediscover, false);
     settings::setBool(keys::mqtt::rediscover, true);
 
@@ -109,11 +98,11 @@ void settingsMigrate(){
 
 
 void settingsSetup(){
-  Serial.println("-----------------------------");
-  Serial.println("Initialize settings:");
-
-  if (!settings::begin()){
-    Serial.println("Settings initialize error"); };
+  // Уровень E, а не просто сообщение в Serial: не открывшаяся база означает,
+  // что устройство поднимется на значениях по умолчанию и молча забудет всё
+  // настроенное. Это худшее, что случается на загрузке, и в логе оно должно
+  // выглядеть соответственно.
+  if (!settings::begin()) LOG_E(set, F("storage init failed"));
 
   // Миграция до значений по умолчанию: она может очистить базу, и defineX
   // ниже наполнят её заново.
@@ -150,8 +139,20 @@ void settingsSetup(){
 
   #ifdef DEBUG_DB
     settings::detail::db().dump(Serial);
-    println(" ");
   #endif
+}
+
+
+// Обновление по воздуху -- единственный способ прошить ESP-01, и до сих пор
+// оно не оставляло в логе ни следа. Незаконченная попытка выглядела как
+// беспричинная потеря отзывчивости, а законченная -- как беспричинная
+// перезагрузка. Успех отдельной строкой не отмечается: о нём говорит
+// загрузочный баннер новой версии.
+void otaLogSetup(){
+  ArduinoOTA.onStart([](){ LOG_W(ota, F("update started, device is busy")); });
+  ArduinoOTA.onError([](ota_error_t error){
+    LOG_E(ota, String(F("update failed code=")) + error);
+  });
 }
 
 
@@ -160,29 +161,37 @@ void startup(){
   //Log
   glog.start(1000);
 
-  println("");println("");println("");
-  println("-------------------------------");
-  println("Booting...");
+  // Пустая строка отделяет наш вывод от сообщений загрузчика: он говорит на
+  // тех же 74880 бодах и обрывается на середине строки.
+  Serial.println();
+
+  // Первым делом -- кто загрузился и почему. Это единственные две строки,
+  // по которым разбирается самый частый вопрос к устройству без консоли:
+  // "оно перезагрузилось само, что случилось". Причина сброса живёт только
+  // до следующей перезагрузки, поэтому спросить её потом уже нельзя.
+  LOG_I(boot, String(F("start ")) + device::model() + " v" + sw_version +
+              F(" built=") + release_date);
+  LOG_I(boot, String(F("chip=")) + String(ESP.getChipId(), HEX) +
+              F(" heap=") + ESP.getFreeHeap() +
+              F(" reset=") + ESP.getResetReason());
 
   //Settings
   settingsSetup();
 
   //Device
-  println("Initialize device");
   device::begin();
 
   // WiFi
   corewifi::begin(settings::getStringValue(keys::dev::name));
 
   // Enable OTA update
-  println("Starting OTA updates");
+  otaLogSetup();
   ArduinoOTA.begin();
 
   //MQTT
   mqttStart();
 
   //NTP
-  println("Starting NTP");
   corentp::setOffsetFromSettings(tzOffsetSeconds(settings::getInt(keys::dev::timezone)));
 
   // Ждать синхронизации на загрузке незачем: первый же tick() отправит запрос,
@@ -191,13 +200,15 @@ void startup(){
 
   portalStart();
 
-  println("Boot complete");
-  println("-------------------------------");
+  // Куча после загрузки -- точка отсчёта для всего последующего: сравнив её
+  // со свежим баннером после самопроизвольной перезагрузки, видно, утекала
+  // память или устройство упало по другой причине.
+  LOG_I(boot, String(F("ready heap=")) + ESP.getFreeHeap());
 }
 
 
 void factoryReset(){
-  println("Factory reset");
+  LOG_W(set, F("factory reset"));
   // Прежде чем терять имя, снять с брокера всё, что под ним опубликовано:
   // после сброса топики будут другими, и старые retained-сообщения остались бы
   // у брокера навсегда -- вместе с сущностью в HomeAssistant, которая никогда
@@ -207,7 +218,7 @@ void factoryReset(){
   // Тоже через заказ: сброс приходит из обработчика формы. Пока перезагрузка
   // ждёт своего срока, публикации в MQTT остановлены -- иначе очередное
   // периодическое сообщение вернуло бы брокеру только что снятый топик.
-  restartRequest();
+  restartRequest("factory reset");
 }
 
 
@@ -215,8 +226,13 @@ void factoryReset(){
 // ДО отправки ответа (portal.h:221), поэтому перезагружаться прямо здесь
 // нельзя: ответ уйти не успеет и страница повиснет. Разбор в
 // restart_request.h.
-void restartRequest(){
-  println("Reboot requested");
+//
+// Причина -- обязательный аргумент, а не удобство: перезагрузок у устройства
+// пять разных поводов, и в логе они выглядели одинаково. После неё в
+// следующем баннере стоит reset=Software/Restart, и связка "почему заказали"
+// плюс "чем закончилось" читается через перезагрузку.
+void restartRequest(const char* reason){
+  LOG_I(boot, String(F("reboot requested reason=")) + reason);
   restartPending.request(millis());
 }
 
@@ -229,8 +245,7 @@ void restartTick(){
 
 
 void restart(){
-  println("Rebooting...");
-  println("-------------------------------");
+  LOG_I(boot, F("rebooting"));
   SendAvailableMessage("offline");
   mqttClient.loop();
   portal.tick();

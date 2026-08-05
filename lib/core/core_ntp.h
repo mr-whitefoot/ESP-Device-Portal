@@ -29,6 +29,11 @@ static const uint8_t PACKET_SIZE = 48;
 
 ntp::NtpClock clock_;
 
+// Нужен разбору ответа выше по файлу: первая удачная синхронизация печатает
+// стенное время, и это единственная строка, по которой аптайм в логе
+// переводится в календарное время.
+String formattedTime();
+
 WiFiUDP udp;
 bool udpStarted = false;
 
@@ -112,7 +117,13 @@ void pollResponse() {
   // прочие вырожденные ответы). Такой ответ хуже отсутствия ответа.
   if (ntpSeconds < SEVENTY_YEARS) return;
 
+  bool wasSet = clock_.isTimeSet();
   clock_.onResponse(millis(), ntpSeconds - SEVENTY_YEARS);
+
+  // Только первая синхронизация. Последующие приходят по расписанию каждые
+  // несколько минут, и печатать их значит забить ими весь лог; расхождение
+  // хода при этом всё равно не видно -- часы правятся молча.
+  if (!wasSet) LOG_I(ntp, String(F("synced time=")) + formattedTime());
 }
 
 
@@ -133,7 +144,12 @@ void tick() {
     resolveDone = false;
     if (resolveOk) {
       serverIp = IPAddress(ip_addr_get_ip4_u32(&resolvedAddr));
-      println("NTP server resolved: " + serverIp.toString());
+      LOG_I(ntp, String(F("resolved ")) + POOL + "=" + serverIp.toString());
+    } else {
+      // Неудачный резолв означает, что времени не будет, а без него молча
+      // не сработают суточные таймеры реле. Раньше эта ветка не печатала
+      // ничего, и отсутствие срабатываний выглядело поломкой таймеров.
+      LOG_W(ntp, String(F("resolve failed name=")) + POOL);
     }
     clock_.onResolved(now, resolveOk);
   }

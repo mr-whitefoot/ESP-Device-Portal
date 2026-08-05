@@ -78,13 +78,13 @@ void topicCreate(){
   mqttData.topic.state = topicFor(deviceName, "state");
   mqttData.topic.command = topicFor(deviceName, "set");
 
-  #ifdef DEBUG_MQTT
-    println("MQTT discovery topic: "+ mqttData.topic.discovery );
-    println("MQTT available topic: "+ mqttData.topic.available );
-    println("MQTT state topic: "+ mqttData.topic.state );
-    println("MQTT command topic: "+ mqttData.topic.command );
-  #endif  
-
+  // Уровень D: топики строятся по одному правилу из имени устройства, и в
+  // норме достаточно знать имя. Нужны они, когда HomeAssistant не видит
+  // сущность, -- тогда сборка с -D LOG_LEVEL=4 показывает все четыре адреса.
+  LOG_D(mqtt, String(F("topic discovery=")) + mqttData.topic.discovery);
+  LOG_D(mqtt, String(F("topic available=")) + mqttData.topic.available);
+  LOG_D(mqtt, String(F("topic state=")) + mqttData.topic.state);
+  LOG_D(mqtt, String(F("topic command=")) + mqttData.topic.command);
 }
 
 
@@ -104,10 +104,10 @@ void clientIdCreate(){
   mqttData.clientId = mqttData.topicName.substring(0, 16) + "_" +
                       String(ESP.getChipId(), HEX);
 
-  // В лог, а не под DEBUG_MQTT: именно по этой строке в брокере опознаётся
-  // устройство, и она же единственное доказательство, что идентификаторы
-  // двух железок разошлись.
-  println("MQTT client id: " + mqttData.clientId);
+  // Уровень I, а не D: именно по этой строке в брокере опознаётся устройство,
+  // и она же единственное доказательство, что идентификаторы двух железок
+  // разошлись.
+  LOG_I(mqtt, String(F("client id=")) + mqttData.clientId);
 }
 
 
@@ -135,13 +135,15 @@ const String& getStateTopic(){
 
 
 void mqttStart(){
-  println("Starting MQTT"); 
-
   mqttReadConfig();
 
-  #ifdef DEBUG_MQTT
-    mqttClient.enableDebuggingMessages();
-  #endif  
+  // Адрес брокера в логе -- первое, что спрашивают у неподключающегося
+  // устройства, и первое, что при этом оказывается не тем, чем считалось.
+  LOG_I(mqtt, String(F("init broker=")) + mqttData.connection.serverIp + ":" +
+              mqttData.connection.serverPort +
+              F(" prefix=") + mqttData.connection.topicPrefix);
+  LOG_D(mqtt, String(F("periods state=")) + mqttData.connection.status_delay +
+              F("s available=") + mqttData.connection.available_delay + "s");
 
   //Create topics
   topicCreate();
@@ -155,7 +157,11 @@ void mqttStart(){
   // Указатель сохраняется как есть, поэтому строка обязана пережить клиента --
   // та же причина, что и у завещания ниже.
   mqttClient.setMqttClientName(mqttData.clientId.c_str());
-  mqttClient.setLogCallback(println);
+  // Тег ставит ядро, а не транспорт: сам транспорт не знает, под каким именем
+  // его подсистема называется в логе.
+  mqttClient.setLogCallback([](char level, const String& text){
+    corelog::writeChar(level, corelog::tag::mqtt, text);
+  });
   mqttClient.setOnConnectionEstablishedCallback(onConnectionEstablished);
 
   // Завещание брокеру. Без него пропавшее устройство навсегда остаётся
@@ -166,7 +172,6 @@ void mqttStart(){
   mqttClient.enableLastWillMessage(mqttData.topic.available.c_str(), "offline", true);
 
   // MQTT timers
-  println("Starting MQTT timers");
   MessageTimer.setTime(mqttData.connection.status_delay * 1000);
   MessageTimer.start();
   ServiceMessageTimer.setTime(mqttData.connection.available_delay * 1000);
@@ -182,7 +187,7 @@ void mqttStart(){
 // топики строятся из имени, и после переименования старый config продолжал
 // висеть у брокера -- сущность, в которую больше никто никогда не опубликует.
 void mqttClearRetainedFor(const String& deviceName){
-  println("MQTT clearing retained topics for " + deviceName);
+  LOG_I(mqtt, String(F("clearing retained name=")) + deviceName);
   mqttClient.publish(topicFor(deviceName, "config"), "", true);
   mqttClient.publish(topicFor(deviceName, "state"), "", true);
   mqttClient.publish(topicFor(deviceName, "available"), "", true);
@@ -198,7 +203,7 @@ void mqttClearRetainedFor(const String& deviceName){
 
 void mqttClearRetained(){
   if (!mqttClient.isConnected()){
-    println("MQTT is offline, retained topics left as is");
+    LOG_W(mqtt, F("offline, retained topics left as is"));
     return;
   }
   mqttClearRetainedFor(mqttData.connection.clientName);
@@ -254,7 +259,7 @@ void mqttAnnounce(){
 // адресу завещание -- но не сразу, а через keep-alive с половиной сверху.
 // Уберись мы сейчас, завещание вернуло бы мусор следом.
 void mqttRetirePreviousEntity(){
-  println("MQTT schema upgrade: retiring previous entity");
+  LOG_I(mqtt, F("retiring previous entity after schema upgrade"));
   mqttClient.publish(getDiscoveryTopic(), "", true);
   mqttClient.loop();
 }
@@ -265,7 +270,7 @@ void mqttRetirePreviousEntity(){
 void mqttClearLegacyAvailable(){
   if (!settings::getBool(keys::mqtt::rediscover)) return;
 
-  println("MQTT clearing legacy availability topic");
+  LOG_I(mqtt, F("clearing legacy availability topic"));
   mqttClient.publish(topicFor(mqttData.connection.clientName, LEGACY_AVAILABLE_LEAF),
                      "", true);
   mqttClient.loop();
@@ -276,7 +281,7 @@ void mqttClearLegacyAvailable(){
 
 
 void onConnectionEstablished() {
-  println("MQTT server is connected");
+  LOG_I(mqtt, F("connected"));
 
   // Объявиться заново можно только после того, как HA переварит удаление,
   // поэтому на обновлении discovery откладывается. Дальше объявление идёт
@@ -306,10 +311,17 @@ void onConnectionEstablished() {
     CleanupTimer.start();
   }
 
-  mqttClient.subscribe(getCommandTopic(), [] (const String &payload)  {
-    println("MQTT received command topic");
+  // Полезная нагрузка в строке, а не просто факт прихода команды: раньше в
+  // логе стояло "received command topic", и по нему нельзя было отличить
+  // команду, которую устройство не поняло, от команды, которую оно поняло и
+  // выполнило не так, как ждал отправитель.
+  bool subscribed = mqttClient.subscribe(getCommandTopic(), [] (const String &payload)  {
+    LOG_I(mqtt, String(F("command ")) + payload);
     device::onCommand(payload);
   });
+  // Молча не подписавшееся устройство выглядит как исправное: состояние оно
+  // публикует, доступность тоже, и только команды до него не доходят.
+  if (!subscribed) LOG_W(mqtt, F("command subscribe failed"));
 }
 
 
@@ -317,9 +329,7 @@ void publishState() {
   if (!mqttClient.isConnected()){
     return;
   };
-  #ifdef DEBUG_MQTT
-    println("MQTT publish status");
-  #endif
+  LOG_D(mqtt, F("publish state"));
   JsonDocument doc;
   doc["WiFiRSSI"] = WiFi.RSSI();
   doc["IPAddress"] = WiFi.localIP().toString();
@@ -332,14 +342,12 @@ void publishState() {
   // HomeAssistant подписывается на пустой топик и держит сущность unknown,
   // пока не придёт очередное периодическое сообщение.
   if (!mqttClient.publish(getStateTopic(), payload, true))
-    println("MQTT state publish failed, size "+String(payload.length()));
+    LOG_W(mqtt, String(F("state publish failed size=")) + payload.length());
 }
 
 
 void SendDiscoveryMessage( ){
-  #ifdef DEBUG_MQTT
-    println("MQTT publish discovery message");
-  #endif
+  LOG_D(mqtt, F("publish discovery"));
   // Раньше документ сериализовался в char[1024]. Полезная нагрузка с длинным
   // именем устройства подбиралась к этому пределу вплотную, а serializeJson
   // при нехватке места молча обрезает вывод -- в брокер уходил битый JSON.
@@ -398,14 +406,12 @@ void SendDiscoveryMessage( ){
   // Сообщение крупное, и транспорт может не принять его, например при
   // нехватке памяти: без явной проверки автообнаружение отвалится беззвучно.
   if (!mqttClient.publish(getDiscoveryTopic(), payload, true))
-    println("MQTT discovery publish failed, size "+String(payload.length()));
+    LOG_W(mqtt, String(F("discovery publish failed size=")) + payload.length());
 }
 
 
 void SendAvailableMessage(const String &mode = "online"){
-  #ifdef DEBUG_MQTT
-    println("MQTT publish available message");
-  #endif
+  LOG_D(mqtt, String(F("publish available ")) + mode);
   // retain=true, иначе после перезапуска HomeAssistant сущность висит
   // unavailable до следующего периодического сообщения.
   mqttClient.publish(getAvailableTopic(), mode, true);
