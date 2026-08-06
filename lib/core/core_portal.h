@@ -465,6 +465,7 @@ void portalBuild(){
           GP.LABEL("Firmware version");
           GP.LABEL(sw_version);
         GP.BOX_END();
+        coreupdate::hint();
         GP.BOX_BEGIN(GP_EDGES);
           GP.LABEL("Release date");
           GP.LABEL(release_date);
@@ -683,6 +684,9 @@ void OTAbuild(bool UpdateEnd, const String& UpdateError) {
     GP.THEME(GP_DARK);
     GP.PAGE_TITLE(F("Firmware upgrade"));
     if (!UpdateEnd) {
+      // Сначала обновление с GitHub, ручная заливка файлом -- ниже: она
+      // остаётся способом отката и заливки непубликованной сборки.
+      coreupdate::block();
       GP.BLOCK_TAB_BEGIN(F("Firmware upgrade"));
         GP.OTA_FIRMWARE(F("OTA firmware"), GP_GREEN, true);
       GP.BLOCK_END();

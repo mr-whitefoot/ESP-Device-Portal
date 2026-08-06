@@ -9,13 +9,19 @@ on:
       - 'version_*'
 
 # gh release create пишет в репозиторий, токену по умолчанию этого мало.
+# pages/id-token нужны зеркалу для страницы обновления, см. шаги в конце.
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   release:
     name: Собрать и опубликовать прошивки
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages_deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
 
@@ -82,3 +88,65 @@ jobs:
             --title "ESP-Device-Portal $version" \
             --notes-file notes.md \
             --generate-notes
+
+      # Зеркало для страницы обновления в портале. Ассеты релиза для неё не
+      # годятся: release-assets.githubusercontent.com отдаёт файл без заголовка
+      # Access-Control-Allow-Origin, и fetch со страницы устройства туда
+      # запрещён браузером. У GitHub Pages CORS открыт.
+      #
+      # Шаги идут после создания релиза намеренно: если Pages в настройках
+      # репозитория не включён, упадёт зеркало, а не публикация прошивок.
+      #
+      # Ключ images -- это custom_device_name окружения; прошивка знает своё имя
+      # из -D IMAGE_NAME и по нему находит свой файл. md5 браузером не
+      # проверяется (на странице по http нет crypto.subtle), он для ручной
+      # сверки и локальных утилит.
+      - name: Собрать manifest.json
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib
+          version = os.environ["version"]
+          suffix = "_v%s.bin" % version
+          images = {}
+          for path in sorted(pathlib.Path("dist").glob("*.bin")):
+              images[path.name[len("ESP_"):-len(suffix)]] = {
+                  "file": path.name,
+                  "size": path.stat().st_size,
+                  "md5": hashlib.md5(path.read_bytes()).hexdigest(),
+              }
+          manifest = {"version": version, "images": images}
+          pathlib.Path("dist/manifest.json").write_text(
+              json.dumps(manifest, indent=1) + "\n")
+          print(json.dumps(manifest, indent=1))
+
+          # Зеркало заняло адрес, по которому раньше публиковался README, и без
+          # index.html корень сайта отдавал бы 404. Страница заодно объясняет,
+          # что это за файлы и что руками их качать не нужно.
+          rows = "\n".join(
+              '<li><a href="{f}">{f}</a> — {s} B</li>'.format(f=i["file"], s=i["size"])
+              for i in images.values())
+          pathlib.Path("dist/index.html").write_text(
+              '<!doctype html><meta charset="utf-8">'
+              "<title>ESP-Device-Portal {v}</title>"
+              "<h1>ESP-Device-Portal {v}</h1>"
+              "<p>Зеркало прошивок для страницы обновления в портале устройства. "
+              'Обычный путь — кнопка <b>Install</b> на странице Firmware upgrade; '
+              'описание в <a href="https://github.com/mr-whitefoot/ESP-Device-Portal"'
+              ">репозитории</a>.</p>"
+              '<ul>{rows}</ul><p><a href="manifest.json">manifest.json</a></p>\n'
+              .format(v=version, rows=rows))
+          PY
+
+      # enablement переводит Pages репозитория на публикацию из Actions. Без
+      # него сайт, заведённый из ветки, остаётся в режиме legacy, и deploy-pages
+      # падает с отказом развернуть артефакт.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - id: pages_deploy
+        uses: actions/deploy-pages@v4

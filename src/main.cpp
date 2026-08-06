@@ -72,6 +72,8 @@ void restartRequest(const char* reason);
 // После core_wifi.h: адаптеру нужен WiFi.status(), а объявления сети приходят
 // оттуда. До core_portal.h и core_boot.h: они уже зовут corentp::.
 #include <core_ntp.h>
+// До core_portal.h: страницы портала зовут coreupdate::.
+#include <core_update.h>
 #include <core_portal.h>
 #include <core_boot.h>
 #include <core_mqtt.h>

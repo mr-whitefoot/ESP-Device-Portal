@@ -11,3 +11,8 @@ env.Replace(PROGNAME="ESP_%s_v%s" % (
 
 # Дата сборки.
 env.Append(CPPDEFINES=[("RELEASE_DATE", date.today().strftime("%d.%m.%Y"))])
+
+# Имя образа для страницы обновления: по нему прошивка находит в manifest.json
+# свой файл среди пяти. Берётся оттуда же, откуда имя bin-файла, поэтому
+# разъехаться с релизом не может.
+env.Append(CPPDEFINES=[("IMAGE_NAME", env.GetProjectOption("custom_device_name"))])

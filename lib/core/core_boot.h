@@ -37,6 +37,10 @@ void portalStart(){
     portal.enableOTA(portalAuthUsername, portalAuthPassword);
   else
     portal.enableOTA();
+  // После start(): маршрут регистрируется на сервере портала, а его создаёт
+  // start(). Свой обработчик имеет приоритет над onNotFound, который иначе
+  // принял бы /fw.js за файл в файловой системе.
+  coreupdate::routes();
   corewifi::portalStarted();
 
   LOG_I(web, String(F("portal up auth=")) + (portalAuthEnabled ? "on" : "off"));
