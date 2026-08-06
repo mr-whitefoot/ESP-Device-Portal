@@ -14,8 +14,9 @@
 // кликов нет, своих страниц нет. Ядро об этом не знает и обращается только
 // через device::*.
 
-// Единственный пин ESP-01, свободный при работающем UART.
-#define ONE_WIRE_BUS 2
+#if !defined(ONE_WIRE_PIN)
+  #error "Для DEVICE_DS18B20 должен быть задан ONE_WIRE_PIN"
+#endif
 
 namespace device {
 namespace detail {
@@ -38,7 +39,7 @@ static const uint8_t FILTER_WINDOW = 9;
 // символ с кодом 0xB0C, а не как градус и букву.
 static const char DEGREE_C[] = "\xc2\xb0" "C";
 
-OneWire oneWire(ONE_WIRE_BUS);
+OneWire oneWire(ONE_WIRE_PIN);
 DS18B20 sensor(&oneWire);
 TimerMs readTimer;
 MedianFilter<FILTER_WINDOW> filter(SENSOR_MIN_C, SENSOR_MAX_C);
@@ -150,10 +151,10 @@ void defineSettings() {
 
 void begin() {
   // Шину подтягивает внешний резистор, ножка контроллера остаётся входом.
-  pinMode(ONE_WIRE_BUS, INPUT);
+  pinMode(ONE_WIRE_PIN, INPUT);
 
   detail::sensorSetup();
-  LOG_I(dev, String(F("ds18b20 init bus=")) + ONE_WIRE_BUS +
+  LOG_I(dev, String(F("ds18b20 init bus=")) + ONE_WIRE_PIN +
              F(" period=") + settings::getInt(keys::sensor::refresh) + "s");
 
   // Не ошибка: датчик, подключённый после загрузки, подхватится первым же

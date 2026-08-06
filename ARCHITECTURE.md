@@ -4,7 +4,7 @@
 
 Репозиторий собирает несколько прошивок для ESP8266 из общего ядра. Реле
 поддерживается на ESP-01 и D1 mini, банк восьми реле — на ESP-07S, датчик
-DS18B20 — на ESP-01. Портал, Wi-Fi,
+DS18B20 — на ESP-01 и D1 mini. Портал, Wi-Fi,
 MQTT, NTP, OTA и хранение настроек общие; работа с типом конечного устройства
 находится в `lib/device_*`, а различия плат задаются профилями PlatformIO.
 
@@ -27,7 +27,8 @@ MQTT, NTP, OTA и хранение настроек общие; работа с 
 | `esp01_relay` | `[esp01]` | `DEVICE_RELAY` | `RELAY_PIN=0` |
 | `d1_mini_relay` | `[d1_mini]` | `DEVICE_RELAY` | `RELAY_PIN=D2` (GPIO4) |
 | `esp07s_relay8` | `[esp07s]` | `DEVICE_RELAY_BANK` | GPIO16,14,12,13,15,0,4,5 |
-| `esp01_ds18b20` | `[esp01]` | `DEVICE_DS18B20` | OneWire на GPIO2 |
+| `esp01_ds18b20` | `[esp01]` | `DEVICE_DS18B20` | `ONE_WIRE_PIN=2` |
+| `d1_mini_ds18b20` | `[d1_mini]` | `DEVICE_DS18B20` | `ONE_WIRE_PIN=D4` (GPIO2) |
 
 Окружение PlatformIO задаёт `DEVICE_RELAY`, `DEVICE_RELAY_BANK` или
 `DEVICE_DS18B20`.
@@ -100,6 +101,8 @@ DS18B20 поддерживается один на шину. Преобразо�
 достоверного значения, поле температуры отсутствует и Home Assistant
 показывает `unknown`. `sensor.label` меняет только подпись портала; имя
 сущности Home Assistant берётся из общего `dev.name`.
+Пин шины не зашит в модуль: окружение ESP-01 передаёт GPIO2, а окружение D1
+mini — символический `D4`, который Arduino core также преобразует в GPIO2.
 
 ## Запуск и главный цикл
 
