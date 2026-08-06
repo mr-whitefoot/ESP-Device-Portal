@@ -1,0 +1,15 @@
+; Пример локального инвентаря для tools/fleet_upload.py.
+; Скопируйте в tools/fleet.ini и замените адреса и устройства своими.
+; tools/fleet.ini исключён из Git, потому что содержит адреса устройств.
+
+[relay_example]
+label = ESP-01 relay
+host = 192.0.2.10
+environment = esp01_relay
+kind = relay
+
+[sensor_example]
+label = D1 mini DS18B20
+host = 192.0.2.11
+environment = d1_mini_ds18b20
+kind = sensor

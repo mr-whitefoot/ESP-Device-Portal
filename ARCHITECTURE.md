@@ -25,7 +25,7 @@ MQTT, NTP, OTA и хранение настроек общие; работа с 
 | Окружение | Профиль платы | Тип устройства | Периферия |
 |---|---|---|---|
 | `esp01_relay` | `[esp01]` | `DEVICE_RELAY` | `RELAY_PIN=0` |
-| `d1_mini_relay` | `[d1_mini]` | `DEVICE_RELAY` | `RELAY_PIN=D2` (GPIO4) |
+| `d1_mini_relay` | `[d1_mini]` | `DEVICE_RELAY` | `RELAY_PIN=D1` (GPIO5) |
 | `esp07s_relay8` | `[esp07s]` | `DEVICE_RELAY_BANK` | GPIO16,14,12,13,15,0,4,5 |
 | `esp01_ds18b20` | `[esp01]` | `DEVICE_DS18B20` | `ONE_WIRE_PIN=2` |
 | `d1_mini_ds18b20` | `[d1_mini]` | `DEVICE_DS18B20` | `ONE_WIRE_PIN=D4` (GPIO2) |
@@ -87,8 +87,8 @@ MQTT, NTP, OTA и хранение настроек общие; работа с 
 `Push` вместо переключателя и убирает `switch` из списка обновляемых полей:
 элемента на странице нет, а импульс всё равно короче периода опроса.
 Физический GPIO не зашит в модуль: окружение передаёт `RELAY_PIN=0` для
-ESP-01 и `RELAY_PIN=D2` для D1 mini. Вариант D1 mini преобразует `D2` в GPIO4 на стороне
-Arduino core.
+ESP-01 и `RELAY_PIN=D1` для D1 mini. Вариант D1 mini преобразует `D1` в GPIO5
+на стороне Arduino core.
 
 Банк реле использует тот же безопасный `ESPRelay`, но хранит восемь экземпляров
 и собирает их изменения в одну запись настроек и одну MQTT-публикацию. У каждого
