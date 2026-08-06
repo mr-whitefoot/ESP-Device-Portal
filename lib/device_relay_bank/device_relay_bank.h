@@ -42,6 +42,7 @@ String relayOptions() {
     label.replace(",", " ");
     options += String(i + 1) + ": " + label;
   }
+  options += ",All relays";
   return options;
 }
 
@@ -49,8 +50,8 @@ void timersLoad() {
   for (uint8_t i = 0; i < TIMER_COUNT; i++) {
     timerTargets[i] = relayBankTarget(settings::getInt(keys::bankTimer::target[i]));
     timers.timer[i].enable = settings::getBool(keys::bankTimer::enable[i]);
-    timers.timer[i].action = settings::getBool(
-        keys::relayBank::buttonMode[timerTargets[i]])
+    timers.timer[i].action = timerTargets[i] < RELAY_BANK_COUNT &&
+        settings::getBool(keys::relayBank::buttonMode[timerTargets[i]])
         ? TIMER_ACTION_ON
         : (uint8_t)settings::getInt(keys::bankTimer::action[i]);
     timers.timer[i].hours = (uint8_t)settings::getInt(keys::bankTimer::hours[i]);
@@ -102,14 +103,25 @@ void scheduleHandle() {
     if (!(due & (1UL << i))) continue;
 
     uint8_t target = timerTargets[i];
-    LOG_I(dev, String(F("timer=")) + i + F(" relay=") + (target + 1) +
+    String targetName = target == RELAY_BANK_ALL_TARGET
+        ? String(F("all")) : String(target + 1);
+    LOG_I(dev, String(F("timer=")) + i + F(" relay=") + targetName +
                F(" action=") +
                (timers.timer[i].action == TIMER_ACTION_ON    ? "on" :
                 timers.timer[i].action == TIMER_ACTION_OFF   ? "off" : "toggle"));
-    switch (timers.timer[i].action) {
-      case TIMER_ACTION_ON:     relays[target].SetState(true);  break;
-      case TIMER_ACTION_OFF:    relays[target].SetState(false); break;
-      case TIMER_ACTION_TOGGLE: relays[target].ResetState();    break;
+
+    for (uint8_t relay = 0; relay < RELAY_BANK_COUNT; relay++) {
+      if (!relayBankTargetIncludes(target, relay)) continue;
+
+      // Button mode остаётся импульсным и в групповой цели. Обычные каналы
+      // выполняют выбранное пользователем действие.
+      uint8_t action = settings::getBool(keys::relayBank::buttonMode[relay])
+          ? TIMER_ACTION_ON : timers.timer[i].action;
+      switch (action) {
+        case TIMER_ACTION_ON:     relays[relay].SetState(true);  break;
+        case TIMER_ACTION_OFF:    relays[relay].SetState(false); break;
+        case TIMER_ACTION_TOGGLE: relays[relay].ResetState();    break;
+      }
     }
   }
 }
@@ -139,8 +151,18 @@ void buildTimerUi(uint8_t index, const String& options) {
       GP.SELECT(indexedId("bankTimerAction", index), "On,Off,Toggle",
                 timers.timer[index].action);
     GP.BOX_END();
-    if (settings::getBool(keys::relayBank::buttonMode[target]))
-      GP.LABEL("Button mode target always uses On");
+    bool hasButtonTarget = false;
+    for (uint8_t relay = 0; relay < RELAY_BANK_COUNT; relay++) {
+      if (relayBankTargetIncludes(target, relay) &&
+          settings::getBool(keys::relayBank::buttonMode[relay])) {
+        hasButtonTarget = true;
+        break;
+      }
+    }
+    if (hasButtonTarget)
+      GP.LABEL(target == RELAY_BANK_ALL_TARGET
+          ? "Button mode relays always use On"
+          : "Button mode target always uses On");
   GP.BLOCK_END();
 }
 

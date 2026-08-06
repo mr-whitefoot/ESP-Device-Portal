@@ -11,10 +11,30 @@ void test_all_eight_targets_are_preserved(void) {
     TEST_ASSERT_EQUAL_UINT8(i, relayBankTarget(i));
 }
 
+void test_all_relays_target_is_preserved(void) {
+  TEST_ASSERT_EQUAL_UINT8(RELAY_BANK_ALL_TARGET,
+                          relayBankTarget(RELAY_BANK_ALL_TARGET));
+}
+
 void test_invalid_targets_fall_back_to_first_relay(void) {
   TEST_ASSERT_EQUAL_UINT8(0, relayBankTarget(-1));
-  TEST_ASSERT_EQUAL_UINT8(0, relayBankTarget(RELAY_BANK_COUNT));
+  TEST_ASSERT_EQUAL_UINT8(0, relayBankTarget(RELAY_BANK_ALL_TARGET + 1));
   TEST_ASSERT_EQUAL_UINT8(0, relayBankTarget(1000));
+}
+
+void test_all_relays_target_includes_every_channel(void) {
+  for (uint8_t relay = 0; relay < RELAY_BANK_COUNT; relay++)
+    TEST_ASSERT_TRUE(relayBankTargetIncludes(RELAY_BANK_ALL_TARGET, relay));
+  TEST_ASSERT_FALSE(
+      relayBankTargetIncludes(RELAY_BANK_ALL_TARGET, RELAY_BANK_COUNT));
+}
+
+void test_single_target_includes_only_selected_channel(void) {
+  for (uint8_t target = 0; target < RELAY_BANK_COUNT; target++) {
+    for (uint8_t relay = 0; relay < RELAY_BANK_COUNT; relay++)
+      TEST_ASSERT_EQUAL(target == relay,
+                        relayBankTargetIncludes(target, relay));
+  }
 }
 
 void test_entity_ids_are_stable_and_distinct(void) {
@@ -64,7 +84,10 @@ void test_bank_setting_keys_do_not_collide(void) {
 int main(int argc, char** argv) {
   UNITY_BEGIN();
   RUN_TEST(test_all_eight_targets_are_preserved);
+  RUN_TEST(test_all_relays_target_is_preserved);
   RUN_TEST(test_invalid_targets_fall_back_to_first_relay);
+  RUN_TEST(test_all_relays_target_includes_every_channel);
+  RUN_TEST(test_single_target_includes_only_selected_channel);
   RUN_TEST(test_entity_ids_are_stable_and_distinct);
   RUN_TEST(test_bank_setting_keys_do_not_collide);
   return UNITY_END();
