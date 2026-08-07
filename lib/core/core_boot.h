@@ -25,22 +25,21 @@ void portalStart(){
     portal.disableAuth();
   }
   portal.attach(portalAction);
-  portal.OTA.attachUpdateBuild(OTAbuild);
   // Имя берётся из corewifi: portal.start() запоминает сырой указатель, и
   // строка обязана пережить вызов. Временный String из getStringValue умирал
   // в конце выражения.
   portal.start(corewifi::portalName.c_str());
-  // CustomOTA регистрирует отдельные обработчики, поэтому credentials нужно
-  // передать прямо в enableOTA(). Вызов без аргументов очистил бы их и оставил
-  // /ota_update открытым при закрытом основном портале.
-  if (portalAuthEnabled)
-    portal.enableOTA(portalAuthUsername, portalAuthPassword);
-  else
-    portal.enableOTA();
-  // После start(): маршрут регистрируется на сервере портала, а его создаёт
+  // После start(): маршруты регистрируются на сервере портала, а его создаёт
   // start(). Свой обработчик имеет приоритет над onNotFound, который иначе
   // принял бы /fw.js за файл в файловой системе.
   coreupdate::routes();
+  // Приём образа проверяет учётные данные сам: onNotFound, который закрывает
+  // остальные страницы, до отдельного маршрута не доходит. Пустые строки при
+  // выключенной авторизации означают открытый приём -- как и весь портал.
+  if (portalAuthEnabled)
+    coreota::routes(portalAuthUsername, portalAuthPassword);
+  else
+    coreota::routes("", "");
   corewifi::portalStarted();
 
   LOG_I(web, String(F("portal up auth=")) + (portalAuthEnabled ? "on" : "off"));

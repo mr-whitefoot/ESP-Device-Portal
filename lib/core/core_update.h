@@ -14,11 +14,11 @@
 // Зеркалом служит GitHub Pages -- там CORS открыт, и релизный workflow кладёт
 // туда те же бинарники вместе с manifest.json.
 //
-// Заливается несжатый .bin, хотя устройство приняло бы и .bin.gz. Обработчик
-// GyverPortal объявляет Update.begin() весь свободный флеш, поэтому область
-// стейджинга встаёт сразу за текущим скетчем, а eboot распаковывает от нуля
-// вверх без проверки перекрытия: gz-образ, который в распакованном виде больше
-// оставшегося промежутка, затрёт собственный источник. Разбор -- в HANDOFF.md.
+// Скачанный образ уходит на свой обработчик приёма (core_ota.h) вместе с
+// размером и md5 из манифеста. Заливается несжатый .bin: зеркало пока публикует
+// только его. Со своим обработчиком дорога для .bin.gz открыта -- он объявляет
+// настоящий размер, и распакованному образу остаётся больше сотни килобайт
+// запаса, -- но это отдельный шаг, разбор в HANDOFF.md.
 
 namespace coreupdate {
 
@@ -51,7 +51,8 @@ if(f.size>FW.f){s('Image needs '+f.size+' B, only '+FW.f+' B free');return;}
 if(G)G.style.display='none';
 get(B+f.file,function(x){
 var d=new FormData();d.append('firmware',x.response,f.file);
-var u=new XMLHttpRequest();u.open('POST','/ota_update');
+var u=new XMLHttpRequest();
+u.open('POST','/ota_update?size='+f.size+'&md5='+f.md5);
 u.upload.onprogress=function(e){s('Flashing '+((100*e.loaded/e.total)|0)+'%');};
 u.onload=function(){s('Done, rebooting');setTimeout(function(){location.href='/';},20000);};
 u.onerror=function(){s('Upload failed');};

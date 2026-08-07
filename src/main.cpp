@@ -75,6 +75,9 @@ void restartRequest(const char* reason);
 // До core_portal.h: страницы портала зовут coreupdate::.
 #include <core_update.h>
 #include <core_portal.h>
+// После core_portal.h и до core_boot.h: приём образа пользуется restartRequest,
+// а регистрируется из portalStart().
+#include <core_ota.h>
 #include <core_boot.h>
 #include <core_mqtt.h>
 

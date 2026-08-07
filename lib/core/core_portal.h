@@ -242,6 +242,23 @@ void portalBuild(){
     GP.HR();
     GP.BUTTON_LINK(form.root, "Back");
 
+  // Firmware upgrade page
+  //
+  // Обычная страница обхода портала, а не отдельный маршрут: приём образа
+  // живёт в core_ota.h и отвечает на POST сам, а показывать здесь нужно то же,
+  // что и на остальных страницах.
+  } else if (portal.uri() == form.firmwareUpgrade) {
+    GP.PAGE_TITLE("Firmware upgrade");
+    GP.TITLE("Firmware upgrade");
+    GP.HR();
+    // Сначала обновление с GitHub, ручная заливка файлом -- ниже: она остаётся
+    // способом отката и заливки непубликованной сборки.
+    coreupdate::block();
+    GP.BLOCK_TAB_BEGIN(F("Upload file"));
+      GP.OTA_FIRMWARE(F("OTA firmware"), GP_GREEN, true);
+    GP.BLOCK_END();
+    GP.BUTTON_LINK(form.config, "Back");
+
   //Log
   } else if (portal.uri() == form.log){
     GP.PAGE_TITLE("Log");
@@ -668,41 +685,4 @@ void portalAction(){
     // разница между этими путями видна только в исходниках библиотеки.
     if (portal.click("rebootButton")){ restartRequest("portal button"); }
   }
-}
-
-
-//Custom OTA page
-void OTAbuild(bool UpdateEnd, const String& UpdateError) {
-  // Обновление через портал -- второй путь прошивки помимо espota, и до сих
-  // пор он не писал в лог ничего: неудачную попытку видел только тот, кто
-  // стоял у браузера. Успех отдельной строкой не отмечается -- о нём скажет
-  // загрузочный баннер новой версии.
-  if (UpdateEnd && UpdateError.length())
-    LOG_E(ota, String(F("web update failed: ")) + UpdateError);
-
-  GP.BUILD_BEGIN(400);
-    GP.THEME(GP_DARK);
-    GP.PAGE_TITLE(F("Firmware upgrade"));
-    if (!UpdateEnd) {
-      // Сначала обновление с GitHub, ручная заливка файлом -- ниже: она
-      // остаётся способом отката и заливки непубликованной сборки.
-      coreupdate::block();
-      GP.BLOCK_TAB_BEGIN(F("Firmware upgrade"));
-        GP.OTA_FIRMWARE(F("OTA firmware"), GP_GREEN, true);
-      GP.BLOCK_END();
-      GP.BUTTON_LINK(form.config, "Back");
-    } else if (UpdateError.length()) {
-      GP.BLOCK_TAB_BEGIN(F("Firmware upgrade"));
-        GP.TITLE(String(F("Update error: ")) + UpdateError);
-        GP.BUTTON_LINK(form.firmwareUpgrade, F("Refresh"));
-      GP.BLOCK_END();
-
-    } else {
-      GP.BLOCK_TAB_BEGIN(F("Firmware upgrade"));
-        GP.TITLE(F("Update Success!"));
-        GP.TITLE(F("Rebooting..."));
-      GP.BLOCK_END();
-      GP.BUTTON_LINK(form.root, "Home");
-    }
-  GP.BUILD_END();
 }
