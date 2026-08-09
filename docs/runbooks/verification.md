@@ -34,7 +34,7 @@ pio run -e d1_mini_ds18b20
   использует фактические 1 MB Flash и разметку `eagle.flash.1m64.ld`.
 - `esp01_ds18b20`: `Espressif Generic ESP8266 ESP-01 1M` и OneWire на GPIO2;
 - `d1_mini_ds18b20`: `WeMos D1 R2 and mini`, 4 MB Flash и OneWire на
-  D4/GPIO2.
+  D2/GPIO4.
 
 Манифест `esp07s` в PlatformIO всё равно печатает строку `HARDWARE: ... 4MB
 Flash`; она не учитывает переопределённый linker script. Для этой платы
@@ -198,7 +198,8 @@ retained-сообщения приходит подписчику с `retain=0` 
 - Если менялись формы, сохранить их без изменения значений и убедиться, что
   HTTP-ответ приходит до применения Wi-Fi или перезагрузки.
 - На D1 mini отдельно проверить, что управляется именно D1/GPIO5, а соседние
-  D2/GPIO4 и D4/GPIO2 не меняют уровень.
+  D2/GPIO4 и D4/GPIO2 не меняют уровень. Реле и датчик собираются разными
+  образами, поэтому D2 у датчика релейному образу не мешает.
 
 Для восьмиканальной платы до подключения нагрузки:
 
@@ -225,7 +226,7 @@ retained-сообщения приходит подписчику с `retain=0` 
 | Плата | Окружение | Файл | OneWire |
 |---|---|---|---|
 | ESP-01 | `esp01_ds18b20` | `ESP_DS18B20_v<version>.bin` | GPIO2 |
-| D1 mini | `d1_mini_ds18b20` | `ESP_DS18B20_D1_mini_v<version>.bin` | D4 (GPIO2) |
+| D1 mini | `d1_mini_ds18b20` | `ESP_DS18B20_D1_mini_v<version>.bin` | D2 (GPIO4) |
 
 - Home Assistant создаёт sensor с единицами и классом measurement.
 - Пока валидного чтения нет, состояние `unknown`, а не `0 °C`.

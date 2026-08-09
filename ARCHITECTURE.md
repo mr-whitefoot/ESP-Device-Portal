@@ -28,7 +28,7 @@ MQTT, NTP, OTA и хранение настроек общие; работа с 
 | `d1_mini_relay` | `[d1_mini]` | `DEVICE_RELAY` | `RELAY_PIN=D1` (GPIO5) |
 | `esp07s_relay8` | `[esp07s]` | `DEVICE_RELAY_BANK` | GPIO16,14,12,13,15,0,4,5 |
 | `esp01_ds18b20` | `[esp01]` | `DEVICE_DS18B20` | `ONE_WIRE_PIN=2` |
-| `d1_mini_ds18b20` | `[d1_mini]` | `DEVICE_DS18B20` | `ONE_WIRE_PIN=D4` (GPIO2) |
+| `d1_mini_ds18b20` | `[d1_mini]` | `DEVICE_DS18B20` | `ONE_WIRE_PIN=D2` (GPIO4) |
 
 Окружение PlatformIO задаёт `DEVICE_RELAY`, `DEVICE_RELAY_BANK` или
 `DEVICE_DS18B20`.
@@ -102,7 +102,8 @@ DS18B20 поддерживается один на шину. Преобразо�
 показывает `unknown`. `sensor.label` меняет только подпись портала; имя
 сущности Home Assistant берётся из общего `dev.name`.
 Пин шины не зашит в модуль: окружение ESP-01 передаёт GPIO2, а окружение D1
-mini — символический `D4`, который Arduino core также преобразует в GPIO2.
+mini — символический `D2`, который Arduino core преобразует в GPIO4. У ESP-01
+выбора нет, а на D1 mini шина намеренно уведена с загрузочного GPIO2.
 
 ## Запуск и главный цикл
 
