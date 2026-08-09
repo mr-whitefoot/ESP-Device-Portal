@@ -47,7 +47,8 @@ if(G)G.style.display='';
 window.fwInstall=function(){
 var f=m.images[FW.i];
 if(!f){s('No image for '+FW.i);return;}
-if(f.size>FW.f){s('Image needs '+f.size+' B, only '+FW.f+' B free');return;}
+var n=(f.size+4095)&-4096;
+if(n>FW.f){s('Image needs '+n+' B, only '+FW.f+' B free');return;}
 if(G)G.style.display='none';
 get(B+f.file,function(x){
 var d=new FormData();d.append('firmware',x.response,f.file);
@@ -71,15 +72,21 @@ void routes(){
 // Что устройство рассказывает о себе скрипту: своя версия, имя своего образа в
 // релизе и сколько места реально осталось под новый образ.
 //
-// Свободное место считается той же формулой, которой обработчик загрузки
-// GyverPortal объявит Update.begin() (CustomOTA.h:447). Иначе проверка в
-// браузере пропустила бы образ, который устройство потом отвергнет с
-// UPDATE_ERROR_SPACE -- уже после того, как полмегабайта уехало по воздуху.
+// Свободное место -- ровно то, с чем сравнивает Update.begin():
+//
+//   updateStartAddress = конец области − round(size)  ≥  текущий скетч
+//   ⟺  round(size) ≤ конец области − текущий скетч = getFreeSketchSpace()
+//
+// Округление до сектора делает скрипт, а вычитать отсюда ничего не нужно. До
+// 4.4.1 здесь стоял ещё и минус сектор -- формула обработчика GyverPortal, от
+// которого отказались в 4.3.1: он объявлял Update.begin() весь свободный флеш,
+// а мы объявляем настоящий размер. Лишний сектор стоил ESP-07S установки 4.4.0:
+// образ помещался ровно, а страница отказывала, промахнувшись на 48 байт.
 void facts(){
   GP.SEND(F("<script>FW={v:'"));
   GP.SEND(sw_version);
   GP.SEND(F("',i:'" STRINGIFY(IMAGE_NAME) "',f:"));
-  GP.SEND(String((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000));
+  GP.SEND(String(ESP.getFreeSketchSpace()));
   GP.SEND(F("}</script><script src='/fw.js'></script>"));
 }
 
