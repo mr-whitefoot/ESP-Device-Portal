@@ -11,6 +11,19 @@ String portalAuthUsername;
 String portalAuthPassword;
 
 
+// Имя режима флеша для баннера. Числом было бы дешевле, но строку из лога
+// читает человек, а не программа.
+const char* flashModeName(){
+  switch (ESP.getFlashChipMode()) {
+    case FM_QIO:  return "QIO";
+    case FM_QOUT: return "QOUT";
+    case FM_DIO:  return "DIO";
+    case FM_DOUT: return "DOUT";
+    default:      return "?";
+  }
+}
+
+
 void portalStart(){
   portal.attachBuild(portalBuild);
 
@@ -174,8 +187,12 @@ void startup(){
   // до следующей перезагрузки, поэтому спросить её потом уже нельзя.
   LOG_I(boot, String(F("start ")) + device::model() + " v" + sw_version +
               F(" built=") + release_date);
+  // Режим флеша в баннере -- единственный способ узнать его, не снимая
+  // устройство: неверный режим убивает плату не сразу, а при следующей смене
+  // SDK, и тогда её уже не спросишь по сети. Разбор -- в HANDOFF.md.
   LOG_I(boot, String(F("chip=")) + String(ESP.getChipId(), HEX) +
               F(" heap=") + ESP.getFreeHeap() +
+              F(" flash=") + flashModeName() +
               F(" reset=") + ESP.getResetReason());
 
   //Settings
