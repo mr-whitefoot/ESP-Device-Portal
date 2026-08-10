@@ -145,7 +145,6 @@ const char* updateIds() { return "temperature"; }
 // --- Жизненный цикл -------------------------------------------------------
 
 void defineSettings() {
-  settings::defineString(keys::sensor::label, "Temperature");
   settings::defineInt(keys::sensor::refresh, 10);
 }
 
@@ -191,7 +190,10 @@ void tick() {
 void buildHomeUi() {
   GP.BLOCK_TAB_BEGIN("Sensor");
     GP.BOX_BEGIN(GP_EDGES);
-      GP.LABEL( settings::getStringValue(keys::sensor::label) );
+      // Показание подписано общим именем устройства, как и у реле. Отдельной
+      // подписи датчика не осталось: она задавалась в двух местах, а в
+      // HomeAssistant всё равно уходило dev.name.
+      GP.LABEL( settings::getStringValue(keys::dev::name) );
       GP.LABEL(detail::displayValue(), "temperature");
     GP.BOX_END();
   GP.BLOCK_END();
@@ -203,16 +205,12 @@ bool buildPage(const String& uri) { return false; }
 
 void buildSettingsUi() {
   GP.BLOCK_TAB_BEGIN("Sensor");
-    GP.TEXT("tempLabel", "Temperature label",
-            settings::getStringValue(keys::sensor::label)); GP.BREAK();
     GP.NUMBER("sensorRefresh", "Refresh time, sec",
               settings::getInt(keys::sensor::refresh)); GP.BREAK();
   GP.BLOCK_END();
 }
 
 void readSettingsForm() {
-  settings::setString(keys::sensor::label, portal.getString("tempLabel").c_str());
-
   int32_t refresh = portal.getInt("sensorRefresh");
   if (refresh < 1) refresh = 1;
   if (refresh != settings::getInt(keys::sensor::refresh))
