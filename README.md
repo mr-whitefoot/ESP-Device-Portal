@@ -3,8 +3,8 @@
 [![CI](https://github.com/mr-whitefoot/ESP-Device-Portal/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mr-whitefoot/ESP-Device-Portal/actions/workflows/ci.yml)
 [![Release](https://github.com/mr-whitefoot/ESP-Device-Portal/actions/workflows/release.yml/badge.svg)](https://github.com/mr-whitefoot/ESP-Device-Portal/actions/workflows/release.yml)
 
-Прошивка для ESP8266 на ESP-01/ESP-01s, Wemos/LOLIN D1 mini и ESP-07S с
-web-порталом и интеграцией в HomeAssistant.
+Прошивка для ESP8266 на ESP-01/ESP-01s, Wemos/LOLIN D1 mini, ESP-07S и
+Sonoff Basic R2 с web-порталом и интеграцией в HomeAssistant.
 
 Одна кодовая база, три типа устройств: **одноканальное реле**, **банк из восьми
 реле** и **датчик температуры DS18B20**. Конкретный образ выбирает и плату, и
@@ -15,11 +15,13 @@ web-порталом и интеграцией в HomeAssistant.
 | `esp01_relay`   | ESP-01  | Реле               | 4.5.0  | GPIO0           |
 | `d1_mini_relay` | D1 mini | Реле               | 4.5.0  | D1 (GPIO5)      |
 | `esp07s_relay8` | ESP-07S | 8 реле             | 4.5.0  | 16,14,12,13,15,0,4,5 |
+| `sonoff_basic_relay` | Sonoff Basic R2 | Реле  | 4.8.0  | GPIO12, кнопка GPIO0, светодиод GPIO13 |
 | `esp01_ds18b20` | ESP-01  | Датчик температуры | 4.5.0  | GPIO2 (OneWire) |
 | `d1_mini_ds18b20` | D1 mini | Датчик температуры | 4.5.0 | D2 (GPIO4, OneWire) |
 
-Все пять образов проверены на живом железе: портал, MQTT и обновление по
-воздуху работают на каждом.
+Пять образов проверены на живом железе: портал, MQTT и обновление по воздуху
+работают на каждом. `sonoff_basic_relay` добавлен в 4.8.0 и пока проверен
+только сборкой.
 
 Номер версии общий для всех устройств — ядро одно, и правка в нём выходит сразу
 для всех. Подробнее об этом и обо всех изменениях — в разделе
@@ -93,6 +95,11 @@ web-порталом и интеграцией в HomeAssistant.
   «выключить», «переключить». В `Button mode` выбор `Action` скрыт — таймер
   всегда даёт импульс `On`, а ранее выбранные действия сохраняются и
   возвращаются вместе с обычным режимом.
+- **Кнопка на корпусе и светодиод** — там, где они есть на плате
+  (`sonoff_basic_relay`). Короткое нажатие переключает реле, в `Button mode`
+  даёт тот же импульс, что и команда `ON`. Удержание 10 секунд сбрасывает
+  настройки к заводским: за три секунды до сброса светодиод начинает часто
+  мигать, и кнопку ещё можно отпустить. Светодиод повторяет состояние реле.
 
 ### Банк из восьми реле
 
@@ -191,8 +198,8 @@ state и availability и отдельными command/discovery-топиками
 - кнопка `Install` скачивает выбранный образ и отправляет его на устройство,
   показывая ход загрузки и прошивки. Дальше устройство перезагружается само.
 
-Свой образ среди пяти прошивка находит по имени: `Relay`, `Relay_D1_mini`,
-`Relay_ESP07S_8ch`, `DS18B20`, `DS18B20_D1_mini`. Если в релизе нужного образа
+Свой образ прошивка находит по имени: `Relay`, `Relay_D1_mini`,
+`Relay_ESP07S_8ch`, `Relay_Sonoff_Basic`, `DS18B20`, `DS18B20_D1_mini`. Если в релизе нужного образа
 нет или он не помещается в оставшийся флеш, страница скажет об этом до
 скачивания.
 
@@ -266,6 +273,10 @@ upload_port = 192.168.1.41
 upload_protocol = espota
 upload_port = 192.168.1.42
 
+[env:sonoff_basic_relay]
+upload_protocol = espota
+upload_port = 192.168.1.43
+
 [env:esp01_ds18b20]
 upload_port = 192.168.1.50
 
@@ -275,8 +286,9 @@ upload_port = 192.168.1.51
 ```
 
 Файл необязательный: без него всё собирается, ругаться будет только `-t upload`.
-Для D1 mini и ESP-07S по умолчанию выбран `esptool`: первую прошивку можно
-залить по UART командой соответствующего окружения. У D1 mini UART встроен:
+Для D1 mini, ESP-07S и Sonoff Basic R2 по умолчанию выбран `esptool`: первую
+прошивку можно залить по UART командой соответствующего окружения. У D1 mini
+UART встроен:
 
 ```bash
 pio run -e d1_mini_relay -t upload
@@ -337,6 +349,7 @@ upload_speed = 115200
 pio run -e esp01_relay      # реле
 pio run -e d1_mini_relay    # реле на D1 mini, пин D1
 pio run -e esp07s_relay8    # восемь реле на ESP-07S
+pio run -e sonoff_basic_relay  # реле Sonoff Basic R2, пин GPIO12
 pio run -e esp01_ds18b20    # датчик температуры
 pio run -e d1_mini_ds18b20  # датчик температуры на D1 mini, пин D2
 ```
@@ -348,6 +361,7 @@ pio run -e d1_mini_ds18b20  # датчик температуры на D1 mini, 
 .pio/build/esp01_relay/ESP_Relay_v4.6.0.bin
 .pio/build/d1_mini_relay/ESP_Relay_D1_mini_v4.6.0.bin
 .pio/build/esp07s_relay8/ESP_Relay_ESP07S_8ch_v4.6.0.bin
+.pio/build/sonoff_basic_relay/ESP_Relay_Sonoff_Basic_v4.6.0.bin
 .pio/build/esp01_ds18b20/ESP_DS18B20_v4.6.0.bin
 .pio/build/d1_mini_ds18b20/ESP_DS18B20_D1_mini_v4.6.0.bin
 ```
@@ -448,10 +462,10 @@ GitHub Pages — это зеркало для страницы обновлен�
 pio test -e native
 ```
 
-160 тестов. Покрыты слой настроек, автоматы подключения к Wi-Fi и MQTT,
+179 тестов. Покрыты слой настроек, автоматы подключения к Wi-Fi и MQTT,
 расписание таймеров, таблица часовых поясов, имена MQTT-топиков, разбор команд
-MQTT, часы NTP, отложенная перезагрузка, управление реле и медианный фильтр
-датчика. Требуют железа и тестами не покрываются портал, сетевой транспорт
+MQTT, часы NTP, отложенная перезагрузка, управление реле, кнопка на корпусе,
+светодиод состояния и медианный фильтр датчика. Требуют железа и тестами не покрываются портал, сетевой транспорт
 Wi-Fi/MQTT и файловая система; для них есть
 [runbook проверки](docs/runbooks/verification.md).
 

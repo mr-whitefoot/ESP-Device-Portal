@@ -1,5 +1,15 @@
 #pragma once
 #include <ESPRelay.h>
+// Кнопка и светодиод есть не у всякой платы: у ESP-01 нет ни того, ни
+// другого. Пины задаёт окружение, и по их наличию код и подключается --
+// прошивки без периферии не должны нести её вовсе, флеша на однометровых
+// платах на это нет.
+#if defined(BUTTON_PIN)
+  #include <button.h>
+#endif
+#if defined(STATUS_LED_PIN)
+  #include <status_led.h>
+#endif
 #include <TimerMs.h>
 #include <mqtt_payload.h>
 #include <relay_keys.h>
@@ -21,6 +31,12 @@ namespace device {
 namespace detail {
 
 ESPRelay relay;
+#if defined(BUTTON_PIN)
+Button button;
+#endif
+#if defined(STATUS_LED_PIN)
+StatusLed statusLed;
+#endif
 TimerMs scheduleTick;
 TimerScheduler scheduler;
 
@@ -30,6 +46,14 @@ TimerScheduler scheduler;
 Timers timers;
 
 const char* pageTimers = "/timers";
+
+// Светодиод повторяет состояние реле. Отдельной функцией, потому что точек
+// три: загрузка, смена состояния и возврат из предупреждения о сбросе.
+void ledShowRelay() {
+#if defined(STATUS_LED_PIN)
+  statusLed.Set(relay.GetState());
+#endif
+}
 
 void timersLoad() {
   bool buttonMode = settings::getBool(keys::relay::buttonMode);
@@ -70,6 +94,7 @@ void onRelayChanged() {
     }
   }
 
+  ledShowRelay();
   publishState();
 }
 
@@ -106,6 +131,56 @@ void scheduleHandle() {
     }
   }
 }
+
+#if defined(BUTTON_PIN)
+
+#if defined(STATUS_LED_PIN)
+// За сколько до сброса начинать мигать и с каким шагом. Десять секунд
+// вслепую не удержать: без обратной связи непонятно, замечено ли нажатие
+// вообще, и кнопку отпускают раньше времени.
+constexpr uint32_t RESET_WARN_MS = Button::HOLD_MS - 3000;
+constexpr uint32_t RESET_BLINK_MS = 150;
+bool ledWarning = false;
+#endif
+
+// Кнопка на корпусе.
+//
+// Короткое нажатие -- то же, что переключатель в портале. Отдельной ветки
+// на Button mode здесь нет намеренно: у импульсного реле состояние покоя
+// всегда OFF, поэтому переключение из него и означает ровно нажатие, а
+// отпустит выход сам ESPRelay через BUTTON_PRESS_MS.
+//
+// Удержание -- сброс к заводским настройкам. Это единственный путь вернуть
+// себе устройство в запаянном корпусе, если сменился Wi-Fi: портал
+// недоступен, а до UART не добраться, не вскрыв корпус.
+void buttonHandle() {
+  switch (button.Tick()) {
+    case Button::Event::Click:
+      LOG_I(dev, F("button click"));
+      relay.ResetState();
+      break;
+    case Button::Event::Hold:
+      LOG_W(dev, F("button hold: factory reset"));
+      factoryReset();
+      break;
+    default:
+      break;
+  }
+
+#if defined(STATUS_LED_PIN)
+  // Последние секунды перед сбросом светодиод часто мигает: это и признак
+  // того, что удержание засчитано, и предупреждение -- отпустить ещё можно.
+  if (button.heldMs() >= RESET_WARN_MS) {
+    ledWarning = true;
+    statusLed.Set((millis() / RESET_BLINK_MS) & 1);
+  } else if (ledWarning) {
+    ledWarning = false;
+    ledShowRelay();
+  }
+#endif
+}
+
+#endif  // BUTTON_PIN
 
 void buildTimerUi(const int index, const bool buttonMode) {
   GP.BLOCK_TAB_BEGIN("Timer");
@@ -195,6 +270,17 @@ void begin() {
                       restored, buttonMode);
   detail::relay.ChangeStateCallback(detail::onRelayChanged);
 
+#if defined(STATUS_LED_PIN)
+  // Положение берём у самого реле, а не у restored: в Button mode реле
+  // поднимается выключенным независимо от сохранённого состояния, и
+  // светодиод обязан показывать то, что есть на выходе.
+  detail::statusLed.begin(STATUS_LED_PIN, STATUS_LED_ACTIVE_LOW,
+                          detail::relay.GetState());
+#endif
+#if defined(BUTTON_PIN)
+  detail::button.begin(BUTTON_PIN, BUTTON_ACTIVE_LOW);
+#endif
+
   detail::timersLoad();
 
   detail::scheduleTick.setTime(1000);
@@ -205,6 +291,9 @@ void begin() {
 void tick() {
   detail::relay.Tick();
   detail::scheduleTick.tick();
+#if defined(BUTTON_PIN)
+  detail::buttonHandle();
+#endif
 }
 
 // --- Портал ---------------------------------------------------------------
