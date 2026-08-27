@@ -10,6 +10,7 @@
 
 #define INPUT 0
 #define OUTPUT 1
+#define INPUT_PULLUP 2
 #define LOW 0
 #define HIGH 1
 
@@ -45,11 +46,25 @@ inline std::map<int, bool>& pinIsOutput() {
   return outputs;
 }
 
+// Уровень, который снаружи приложен ко входу. Карта отдаёт LOW для
+// незнакомого пина, поэтому тест кнопки с подтяжкой обязан выставить
+// отпущенное положение явно -- молчаливое "по умолчанию отпущена" скрывало
+// бы ровно ту ошибку, ради которой тест и написан.
+inline std::map<int, int>& pinInput() {
+  static std::map<int, int> levels;
+  return levels;
+}
+
+inline void setPinInput(int pin, int level) {
+  pinInput()[pin] = level;
+}
+
 inline void resetArduinoFake() {
   pinWrites().clear();
   pinModeCalls().clear();
   pinLatch().clear();
   pinIsOutput().clear();
+  pinInput().clear();
   fakeMillis() = 0;
 }
 
@@ -68,6 +83,13 @@ inline void pinMode(int pin, int mode) {
 inline void digitalWrite(int pin, int level) {
   pinLatch()[pin] = level;
   if (pinIsOutput()[pin]) pinWrites().push_back({pin, level});
+}
+
+// Выход читается как его собственная защёлка, вход -- как приложенный
+// снаружи уровень.
+inline int digitalRead(int pin) {
+  if (pinIsOutput()[pin]) return pinLatch()[pin];
+  return pinInput()[pin];
 }
 
 inline unsigned long millis() {
