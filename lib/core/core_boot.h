@@ -136,6 +136,7 @@ void settingsSetup(){
   settings::defineString(keys::mqtt::topicPrefix, "homeassistant");
   // Пусто -- значит за переименованием убирать нечего.
   settings::defineString(keys::mqtt::prevName, "");
+  settings::defineString(keys::mqtt::prevPrefix, "");
   settings::defineInt(keys::mqtt::port, 1883);
   settings::defineInt(keys::mqtt::statusDelay, 10);
   // Пять минут, а не минута: доступность публикуется retained и подкреплена

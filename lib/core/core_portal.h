@@ -563,7 +563,10 @@ void portalCheckForm(){
         // тут не спасает, значений два.
         LOG_I(web, String(F("renamed from=\"")) + prevName +
                    F("\" to=\"") + deviceName + "\"");
-        settings::setString(keys::mqtt::prevName, prevName.c_str());
+        // Незаконченная уборка уже держит имя, под которым сущность
+        // опубликована. Промежуточное имя до брокера не доходило.
+        if (!settings::getStringValue(keys::mqtt::prevName).length())
+          settings::setString(keys::mqtt::prevName, prevName.c_str());
       }
 
       settings::setString(keys::dev::name, deviceName.c_str());
@@ -634,7 +637,14 @@ void portalCheckForm(){
         settings::setString(keys::mqtt::password, mqttPassword.c_str());
       settings::setInt(keys::mqtt::availableDelay, portal.getInt("available_delay"));
       settings::setInt(keys::mqtt::statusDelay, portal.getInt("status_delay"));
-      settings::setString(keys::mqtt::topicPrefix, portal.getString("topicPrefix").c_str());
+      // Прежний префикс -- по тому же правилу, что и прежнее имя: снять его
+      // топики можно только после перезагрузки, разбор в mqttClearPreviousName().
+      String topicPrefix = portal.getString("topicPrefix");
+      String prevPrefix = settings::getStringValue(keys::mqtt::topicPrefix);
+      if (topicPrefix != prevPrefix &&
+          !settings::getStringValue(keys::mqtt::prevPrefix).length())
+        settings::setString(keys::mqtt::prevPrefix, prevPrefix.c_str());
+      settings::setString(keys::mqtt::topicPrefix, topicPrefix.c_str());
 
       LOG_I(web, String(F("mqtt saved broker=")) +
                  settings::getStringValue(keys::mqtt::host) + ":" +

@@ -62,11 +62,11 @@ void mqttReadConfig() {
 //
 // Компонент HomeAssistant задаёт устройство: у реле это switch, у датчика
 // sensor. Правила именования общие, поэтому топики строит ядро.
-String topicFor(const String& deviceName, const char* leaf){
+String topicFor(const String& prefix, const String& deviceName, const char* leaf){
   char safeName[64];
   sanitizeTopicSegment(deviceName.c_str(), safeName, sizeof(safeName));
 
-  return mqttData.connection.topicPrefix + "/" + device::haComponent() + "/" +
+  return prefix + "/" + device::haComponent() + "/" +
          safeName + "/" + leaf;
 }
 
@@ -74,15 +74,16 @@ String topicFor(const String& deviceName, const char* leaf){
 // Discovery и команды нескольких сущностей получают дополнительный стабильный
 // сегмент. Для единственной сущности ветка намеренно возвращает прежний адрес,
 // чтобы обновление существующих устройств не создало дубликаты в HA.
-String topicForEntity(const String& deviceName, uint8_t entity, const char* leaf){
-  if (mqttData.entityCount <= 1) return topicFor(deviceName, leaf);
+String topicForEntity(const String& prefix, const String& deviceName,
+                      uint8_t entity, const char* leaf){
+  if (mqttData.entityCount <= 1) return topicFor(prefix, deviceName, leaf);
 
   char safeName[64];
   char safeEntity[32];
   sanitizeTopicSegment(deviceName.c_str(), safeName, sizeof(safeName));
   sanitizeTopicSegment(device::entityId(entity), safeEntity, sizeof(safeEntity));
 
-  return mqttData.connection.topicPrefix + "/" + device::haComponent() + "/" +
+  return prefix + "/" + device::haComponent() + "/" +
          safeName + "/" + safeEntity + "/" + leaf;
 }
 
@@ -98,12 +99,13 @@ void topicCreate(){
     mqttData.entityCount = mqttData.entityCount == 0 ? 1 : device::MAX_ENTITIES;
   }
 
+  const String& prefix = mqttData.connection.topicPrefix;
   const String& deviceName = mqttData.connection.clientName;
-  mqttData.topic.available = topicFor(deviceName, "available");
-  mqttData.topic.state = topicFor(deviceName, "state");
+  mqttData.topic.available = topicFor(prefix, deviceName, "available");
+  mqttData.topic.state = topicFor(prefix, deviceName, "state");
   for (uint8_t i = 0; i < mqttData.entityCount; i++) {
-    mqttData.entity[i].discovery = topicForEntity(deviceName, i, "config");
-    mqttData.entity[i].command = topicForEntity(deviceName, i, "set");
+    mqttData.entity[i].discovery = topicForEntity(prefix, deviceName, i, "config");
+    mqttData.entity[i].command = topicForEntity(prefix, deviceName, i, "set");
   }
 
   // Уровень D: топики строятся по одному правилу из имени устройства, и в
@@ -220,18 +222,19 @@ void mqttStart(){
 // Без этого смена имени устройства оставляла в HomeAssistant вечный призрак:
 // топики строятся из имени, и после переименования старый config продолжал
 // висеть у брокера -- сущность, в которую больше никто никогда не опубликует.
-void mqttClearRetainedFor(const String& deviceName){
-  LOG_I(mqtt, String(F("clearing retained name=")) + deviceName);
+void mqttClearRetainedFor(const String& prefix, const String& deviceName){
+  LOG_I(mqtt, String(F("clearing retained prefix=")) + prefix +
+              F(" name=") + deviceName);
   for (uint8_t i = 0; i < mqttData.entityCount; i++)
-    mqttClient.publish(topicForEntity(deviceName, i, "config"), "", true);
-  mqttClient.publish(topicFor(deviceName, "state"), "", true);
-  mqttClient.publish(topicFor(deviceName, "available"), "", true);
+    mqttClient.publish(topicForEntity(prefix, deviceName, i, "config"), "", true);
+  mqttClient.publish(topicFor(prefix, deviceName, "state"), "", true);
+  mqttClient.publish(topicFor(prefix, deviceName, "available"), "", true);
   // Топик с прежней опечаткой снимается и здесь. Устройство, которое
   // переименовали ДО обновления, хранит старое имя в prevName, и уборка за
   // ним доедет уже с новыми листьями -- сообщение по адресу с опечаткой
   // осталось бы у брокера навсегда, снять его вручную можно только через
   // сам брокер.
-  mqttClient.publish(topicFor(deviceName, LEGACY_AVAILABLE_LEAF), "", true);
+  mqttClient.publish(topicFor(prefix, deviceName, LEGACY_AVAILABLE_LEAF), "", true);
   mqttClient.loop();
 }
 
@@ -241,7 +244,7 @@ void mqttClearRetained(){
     LOG_W(mqtt, F("offline, retained topics left as is"));
     return;
   }
-  mqttClearRetainedFor(mqttData.connection.clientName);
+  mqttClearRetainedFor(mqttData.connection.topicPrefix, mqttData.connection.clientName);
 }
 
 
@@ -255,16 +258,24 @@ void mqttClearRetained(){
 //
 // Заодно это чинит случай, когда в момент переименования MQTT был недоступен:
 // уборка просто произойдёт при следующем подключении.
+//
+// Смена префикса топиков -- тот же случай: адрес прежней сущности складывается
+// из прежнего префикса и прежнего имени, и любое из них может быть текущим.
 void mqttClearPreviousName(){
-  String prev = settings::getStringValue(keys::mqtt::prevName);
-  if (!prev.length()) return;
+  String prevName = settings::getStringValue(keys::mqtt::prevName);
+  String prevPrefix = settings::getStringValue(keys::mqtt::prevPrefix);
+  if (!prevName.length() && !prevPrefix.length()) return;
+  if (!prevName.length()) prevName = mqttData.connection.clientName;
+  if (!prevPrefix.length()) prevPrefix = mqttData.connection.topicPrefix;
 
-  // Санация имён могла схлопнуть разные имена в один топик -- тогда снимать
-  // нечего, мы бы стёрли собственные свежие сообщения.
-  if (topicFor(prev, "state") != getStateTopic())
-    mqttClearRetainedFor(prev);
+  // Санация имён могла схлопнуть разные имена в один топик, а имя и префикс
+  // могли вернуться к прежним -- тогда снимать нечего, мы бы стёрли
+  // собственные свежие сообщения.
+  if (topicFor(prevPrefix, prevName, "state") != getStateTopic())
+    mqttClearRetainedFor(prevPrefix, prevName);
 
   settings::setString(keys::mqtt::prevName, "");
+  settings::setString(keys::mqtt::prevPrefix, "");
   settings::commit();
 }
 
@@ -307,7 +318,8 @@ void mqttClearLegacyAvailable(){
   if (!settings::getBool(keys::mqtt::rediscover)) return;
 
   LOG_I(mqtt, F("clearing legacy availability topic"));
-  mqttClient.publish(topicFor(mqttData.connection.clientName, LEGACY_AVAILABLE_LEAF),
+  mqttClient.publish(topicFor(mqttData.connection.topicPrefix,
+                              mqttData.connection.clientName, LEGACY_AVAILABLE_LEAF),
                      "", true);
   mqttClient.loop();
 
@@ -341,6 +353,7 @@ void onConnectionEstablished() {
   // Поводов два, и оба ждут одного и того же: топики прежнего имени после
   // переименования и топик доступности с прежней опечаткой после обновления.
   if (settings::getStringValue(keys::mqtt::prevName).length() ||
+      settings::getStringValue(keys::mqtt::prevPrefix).length() ||
       settings::getBool(keys::mqtt::rediscover)){
     CleanupTimer.setTimerMode();
     CleanupTimer.setTime(30000);
