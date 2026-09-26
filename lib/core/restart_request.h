@@ -25,6 +25,12 @@
 // загрузки устройства.
 static const uint32_t RESTART_DELAY_MS = 1000;
 
+// Потолок ожидания закрытия MQTT при factory reset. Живое соединение
+// закрывается за доли секунды; дольше -- значит брокер пропал, и в состоянии
+// DISCONNECTING AsyncMqttClient не шлёт ping, так что разрыв пришлось бы ждать
+// от lwIP минутами. Last Will в этом случае сработает и без нас.
+static const uint32_t RESTART_MQTT_WAIT_MS = 10000;
+
 enum class RestartMode : uint8_t {
   Normal,
   FactoryReset,
@@ -62,12 +68,13 @@ class RestartRequest {
   bool publishesOffline() const { return _mode == RestartMode::Normal; }
 
   // Один раз возвращает true, когда срок наступил.
-  // mqttReady имеет значение только для factory reset: его срок -- не замена
-  // подтверждённому закрытию асинхронного транспорта.
+  // mqttReady имеет значение только для factory reset: он ждёт подтверждённого
+  // закрытия асинхронного транспорта, но не дольше RESTART_MQTT_WAIT_MS.
   bool tick(uint32_t now, bool mqttReady = true) {
     if (!_pending) return false;
     if (now - _since < RESTART_DELAY_MS) return false;
-    if (waitsForMqtt() && !mqttReady) return false;
+    if (waitsForMqtt() && !mqttReady && now - _since < RESTART_MQTT_WAIT_MS)
+      return false;
     _pending = false;
     return true;
   }
