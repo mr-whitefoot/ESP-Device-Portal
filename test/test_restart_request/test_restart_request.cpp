@@ -113,6 +113,14 @@ void test_factory_reset_upgrades_pending_normal_restart(void) {
   TEST_ASSERT_TRUE(rr.tick(RESTART_DELAY_MS, true));
 }
 
+// Брокер пропал, onDisconnect не приходит: сброс не имеет права висеть вечно.
+void test_factory_reset_wait_has_ceiling(void) {
+  rr.request(0, RestartMode::FactoryReset);
+
+  TEST_ASSERT_FALSE(rr.tick(RESTART_MQTT_WAIT_MS - 1, false));
+  TEST_ASSERT_TRUE(rr.tick(RESTART_MQTT_WAIT_MS, false));
+}
+
 int main(int argc, char** argv) {
   UNITY_BEGIN();
   RUN_TEST(test_idle_never_fires);
@@ -126,5 +134,6 @@ int main(int argc, char** argv) {
   RUN_TEST(test_normal_restart_does_not_wait_for_mqtt);
   RUN_TEST(test_factory_reset_waits_for_mqtt_disconnect);
   RUN_TEST(test_factory_reset_upgrades_pending_normal_restart);
+  RUN_TEST(test_factory_reset_wait_has_ceiling);
   return UNITY_END();
 }
