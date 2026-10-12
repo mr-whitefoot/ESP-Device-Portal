@@ -53,6 +53,7 @@ void portalStart(){
   corewifi::portalStarted();
 
   LOG_I(web, String(F("portal up auth=")) + (portalAuthEnabled ? "on" : "off"));
+  corewifi::logPortal(F("up"));
 }
 
 
