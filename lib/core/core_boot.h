@@ -188,7 +188,7 @@ void startup(){
               F(" built=") + release_date);
   // Режим флеша в баннере -- единственный способ узнать его, не снимая
   // устройство: неверный режим убивает плату не сразу, а при следующей смене
-  // SDK, и тогда её уже не спросишь по сети. Разбор -- в HANDOFF.md.
+  // SDK, и тогда её уже не спросишь по сети. Разбор -- в ADR 0016.
   LOG_I(boot, String(F("chip=")) + String(ESP.getChipId(), HEX) +
               F(" heap=") + ESP.getFreeHeap() +
               F(" flash=") + flashModeName() +
