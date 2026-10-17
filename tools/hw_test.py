@@ -752,7 +752,7 @@ def self_test():
     assert seconds_of_day("00:25:21") == 1521 and seconds_of_day("") is None
     assert hms(86395 + 10) == (0, 0, 5)
     page = ("<form action='/x' method='POST'><input type='hidden' name='GP_form' value='/x'>"
-            "<input type='text' name='deviceName' value='Rattan &amp; Co'>"
+            "<input type='text' name='deviceName' value='Acme &amp; Co'>"
             "<input type='checkbox' name='a' checked><input type='hidden' value='0' name='a'>"
             "<input type='checkbox' name='b'><input type='hidden' value='0' name='b'>"
             "<input type='password' name='pw' value=''><input type='radio' disabled checked name='led'>"
@@ -760,7 +760,7 @@ def self_test():
             "<select name='m'><option value='5'>05<option value='6'>06</select>"
             "<input type='submit' value='Save'></form>")
     fields = parse_form(page)
-    assert fields == {"GP_form": "/x", "deviceName": "Rattan & Co", "a": True, "b": False,
+    assert fields == {"GP_form": "/x", "deviceName": "Acme & Co", "a": True, "b": False,
                       "pw": "", "h": "1", "m": "5"}, fields
     assert encode_form({"a": True, "b": False, "h": "1"}) == b"a=on&a=0&b=0&h=1"
     info = image_info("x/ESP_Relay_v1.2.3.bin.gz", gzip.compress(b"abc" * 100))

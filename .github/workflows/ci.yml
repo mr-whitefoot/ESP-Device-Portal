@@ -46,6 +46,14 @@ jobs:
       - name: node test/web/fw_test.js
         run: node test/web/fw_test.js
 
+  tools:
+    name: Самотесты tools/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 tools/hw_test.py --self-test
+      - run: python3 tools/fleet_update.py --self-test
+
   build:
     name: Сборка ${{ matrix.environment }}
     runs-on: ubuntu-latest

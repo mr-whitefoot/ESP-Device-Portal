@@ -13,7 +13,7 @@
 Настройки берутся из tools/broker.ini (в .gitignore, там пароль):
 
     [broker]
-    host = 10.0.1.5
+    host = 192.168.1.10
     port = 1883
     username = mqtt
     password = ...

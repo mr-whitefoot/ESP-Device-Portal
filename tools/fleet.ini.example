@@ -1,6 +1,6 @@
-; Пример локального инвентаря для tools/fleet_upload.py.
+; Пример локального инвентаря для tools/fleet_update.py.
 ; Скопируйте в tools/fleet.ini и замените адреса и устройства своими.
-; Тот же файл читает tools/fleet_update.py (ему нужен только host).
+; Читается только host; label, environment и kind -- пометки для человека.
 ; tools/fleet.ini исключён из Git, потому что содержит адреса устройств.
 
 [relay_example]

@@ -57,7 +57,7 @@ void test_roundtrip_all_types(void) {
 
 // Главное свойство слоя: добавили параметр -- остальные пережили обновление.
 void test_define_does_not_overwrite_existing(void) {
-  settings::setString(k::host, "10.0.1.5");
+  settings::setString(k::host, "192.168.1.10");
   settings::setInt(k::port, 8883);
 
   // как при следующей загрузке прошивки с новым параметром
@@ -65,7 +65,7 @@ void test_define_does_not_overwrite_existing(void) {
   settings::defineInt(k::port, 1883);
   settings::defineBool(k::invert, false);
 
-  TEST_ASSERT_EQUAL_STRING("10.0.1.5", str(k::host));
+  TEST_ASSERT_EQUAL_STRING("192.168.1.10", str(k::host));
   TEST_ASSERT_EQUAL_INT32(8883, settings::getInt(k::port));
   TEST_ASSERT_FALSE(settings::getBool(k::invert));  // новый получил дефолт
 }
@@ -140,7 +140,7 @@ void test_overwrite_changes_value(void) {
 
 void test_clear_removes_everything(void) {
   settings::setInt(k::port, 1883);
-  settings::setString(k::host, "10.0.1.5");
+  settings::setString(k::host, "192.168.1.10");
 
   settings::clear();
 
@@ -153,7 +153,7 @@ void test_clear_removes_everything(void) {
 // перезаписывало бы файл базы.
 void test_writes_are_deferred_until_commit(void) {
   settings::setInt(k::port, 1883);
-  settings::setString(k::host, "10.0.1.5");
+  settings::setString(k::host, "192.168.1.10");
   TEST_ASSERT_EQUAL(0, settings::detail::commitCount());
 
   settings::commit();

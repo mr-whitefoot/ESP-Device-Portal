@@ -18,3 +18,4 @@
 - [0016 — Профили с ESP8285 собираются в режиме флеша DOUT](0016-esp8285-flash-mode-dout.md)
 - [0017 — Версия платформы PlatformIO закреплена](0017-pinned-platform-version.md)
 - [0018 — Сброс к заводским удержанием кнопки на корпусе](0018-button-hold-factory-reset.md)
+- [0019 — Урезание образа: флаги сборки и подмены libc](0019-image-size-trimming.md)
