@@ -454,6 +454,11 @@ void portalBuild(){
           GP.BOX_BEGIN(GP_EDGES);
             GP.LABEL("Status");GP.LED_GREEN("WiFiLed", true);
           GP.BOX_END();
+          // Сеть при работе устройства не меняется, живого обновления не нужно;
+          // в режиме точки доступа этот блок не выводится вовсе.
+          GP.BOX_BEGIN(GP_EDGES);
+            GP.LABEL("SSID"); GP.LABEL(WiFi.SSID());
+          GP.BOX_END();
           GP.BOX_BEGIN(GP_EDGES);
             GP.LABEL("Signal"); GP.LABEL(wifiSignalHtml(WiFi.RSSI()), "signal");
           GP.BOX_END();
