@@ -70,8 +70,10 @@ def read_facts(host):
     return parse_facts(get(f"http://{host}/", 5).decode("utf-8", "ignore"))
 
 
-def upload(host, image, data):
-    """POST как в fw.js: size и md5 в строке запроса, файл в поле firmware."""
+def upload(host, image, data, headers=None):
+    """POST как в fw.js: size и md5 в строке запроса, файл в поле firmware.
+    Возвращает тело ответа устройства (Update success / Update error);
+    headers -- дополнительные заголовки, например Authorization."""
     boundary = uuid.uuid4().hex
     head = (f'--{boundary}\r\nContent-Disposition: form-data; name="firmware"; '
             f'filename="{image["file"]}"\r\nContent-Type: application/octet-stream\r\n\r\n')
@@ -79,8 +81,8 @@ def upload(host, image, data):
     request = urllib.request.Request(
         f"http://{host}/ota_update?size={image['size']}&md5={image['md5']}",
         data=body, method="POST",
-        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
-    urllib.request.urlopen(request, timeout=120).read()
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}", **(headers or {})})
+    return urllib.request.urlopen(request, timeout=120).read()
 
 
 def wait_version(host, version, timeout):
