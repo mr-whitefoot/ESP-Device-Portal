@@ -216,6 +216,8 @@ cp tools/broker.ini.example tools/broker.ini
 python3 tools/mqtt_watch.py 'homeassistant/switch/ESP_Relay/#' 30
 ```
 
+`ESP_Relay` — имя устройства по умолчанию; если оно изменено, подставьте своё.
+
 Скрипт показывает topic, payload и флаг retain. Сообщение, полученное сразу
 после подписки из хранилища брокера, имеет `retain=1`; живая публикация того же
 retained-сообщения приходит подписчику с `retain=0` согласно MQTT.
