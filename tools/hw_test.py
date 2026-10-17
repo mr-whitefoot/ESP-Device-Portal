@@ -585,11 +585,11 @@ def t_reboot(c):
     return msg
 
 
-@check("mqtt_prefix", "смена Topic prefix: новый корень объявлен, старый очищен; префикс возвращается",
-       destructive=True)
-def t_mqtt_prefix(c):
+def _prefix_walk(c, hops):
+    """hops: [(префикс, [префиксы, которые после этого шага должны опустеть])].
+    Возвращает исходный префикс на место и снимает за собой тестовые корни."""
     d, orig = c.dev, c.snap["mqtt"]
-    old, new = orig["topicPrefix"], orig["topicPrefix"] + "_hwtest"
+    old = orig["topicPrefix"]
 
     def root_state(prefix):
         c.drop_mqtt()
@@ -598,22 +598,20 @@ def t_mqtt_prefix(c):
         m.pump(3)
         return {tp: p for tp, p, r in m.events if r and p}
 
-    def move(src, dst):
-        d.post_form("/config/mqtt_config", {**orig, "topicPrefix": dst})
-        d.wait_restart()
-        c.snap["mqtt"] = {**orig, "topicPrefix": dst}
-        wait(lambda: root_state(dst).get(c.topics(dst)["available"]) == "online", 60,
-             f"под {dst} нет availability online")
-        assert c.topics(dst)["config"] in root_state(dst), "нет discovery под новым корнем"
-        try:
-            wait(lambda: not root_state(src), 120, f"под {src} остались retained")
-        except AssertionError as e:
-            left = sorted(t.rsplit("/", 1)[1] for t in root_state(src))
-            raise AssertionError(f"{e}: {left}")
-
     try:
-        move(old, new)
-        move(new, old)
+        for dst, gone in hops:
+            d.post_form("/config/mqtt_config", {**orig, "topicPrefix": dst})
+            d.wait_restart()
+            c.snap["mqtt"] = {**orig, "topicPrefix": dst}
+            wait(lambda: root_state(dst).get(c.topics(dst)["available"]) == "online", 60,
+                 f"под {dst} нет availability online")
+            assert c.topics(dst)["config"] in root_state(dst), "нет discovery под новым корнем"
+            for src in gone:
+                try:
+                    wait(lambda: not root_state(src), 120, f"под {src} остались retained")
+                except AssertionError as e:
+                    left = sorted(t.rsplit("/", 1)[1] for t in root_state(src))
+                    raise AssertionError(f"{e}: {left}")
     finally:
         if c.snap["mqtt"]["topicPrefix"] != old or d.form("/config/mqtt_config")["topicPrefix"] != old:
             d.post_form("/config/mqtt_config", orig)
@@ -621,17 +619,35 @@ def t_mqtt_prefix(c):
         c.snap["mqtt"] = orig
         # Тестовый корень прошивка сама не убирает, если уборка не сработала:
         # снять за собой своими руками (пустой retained), чтобы HA не увидел дубль.
-        try:
-            c.drop_mqtt()
-            m = c.mqtt()
-            m.sub(c.topics(new)["state"].rsplit("/", 1)[0] + "/#")
-            m.pump(2)
-            for tp, p, r in list(m.events):
-                if r and p:
-                    m.pub(tp, "", True)
-            m.pump(1)
-        except (Skip, AssertionError, OSError):
-            pass
+        for test in {h for h, _ in hops} - {old}:
+            try:
+                c.drop_mqtt()
+                m = c.mqtt()
+                m.sub(c.topics(test)["state"].rsplit("/", 1)[0] + "/#")
+                m.pump(2)
+                for tp, p, r in list(m.events):
+                    if r and p:
+                        m.pub(tp, "", True)
+                m.pump(1)
+            except (Skip, AssertionError, OSError):
+                pass
+
+
+@check("mqtt_prefix", "смена Topic prefix: новый корень объявлен, старый очищен; префикс возвращается",
+       destructive=True)
+def t_mqtt_prefix(c):
+    old = c.snap["mqtt"]["topicPrefix"]
+    new = old + "_hwtest"
+    _prefix_walk(c, [(new, [old]), (old, [new])])
+
+
+@check("mqtt_prefix_twice", "две смены префикса подряд до уборки (#26): промежуточный корень пуст; возврат без хвостов",
+       destructive=True)
+def t_mqtt_prefix_twice(c):
+    old = c.snap["mqtt"]["topicPrefix"]
+    a, b = old + "_hwtestA", old + "_hwtestB"
+    _prefix_walk(c, [(a, []), (b, [a, old])])  # A -> B сразу, не дожидаясь уборки через 30 с
+    _prefix_walk(c, [(a, []), (old, [a])])     # A -> исходный: A обязан опустеть
 
 
 def _image(c):
