@@ -58,7 +58,9 @@ const ESP07S = { v: '4.6.0', i: 'Relay_ESP07S_8ch', f: 962560 - 479232,
 
 function element() {
   return {
-    textContent: '', style: {}, options: [], value: '', disabled: false,
+    textContent: '', style: {}, options: [], children: [],
+    appendChild(child) { this.children.push(child); },
+    get text() { return this.textContent || this.children.map(c => c.text).join(''); }, value: '', disabled: false,
     add(option) {
       this.options.push(option);
       if (this.options.length == 1) this.value = option.value;
@@ -105,6 +107,7 @@ function run(page, manifestText, FW, offline) {
     document: {
       currentScript: { src: BASE + 'fw.js' },
       getElementById: id => nodes[id] || null,
+      createElement: () => element(),
     },
   };
   sandbox.window.FW = FW;
@@ -214,17 +217,19 @@ check('ничего не отправлено', r.posts.length, 0);
 
 group('подсказка на главной');
 r = run('main', PHASE2, ESP07S);
-check('о новой версии сообщает', r.nodes.fwNew.textContent,
+check('о новой версии сообщает', r.nodes.fwNew.text,
       'New version 4.7.0 available');
+check('подсказка -- ссылка на страницу обновления',
+      r.nodes.fwNew.children[0].children[0].href, '/ota_update');
 r = run('main', PHASE2, { ...ESP07S, v: '4.7.0' });
-check('об актуальной молчит', r.nodes.fwNew.textContent, '');
+check('об актуальной молчит', r.nodes.fwNew.text, '');
 r = run('main', PHASE2, ESP07S, true);
-check('о недоступном GitHub молчит', r.nodes.fwNew.textContent, '');
+check('о недоступном GitHub молчит', r.nodes.fwNew.text, '');
 
 group('сравнение версий не строковое');
 r = run('main', JSON.stringify({ version: '4.10.0', images: {} }),
         { ...ESP07S, v: '4.9.0' });
-check('4.10.0 новее 4.9.0', r.nodes.fwNew.textContent,
+check('4.10.0 новее 4.9.0', r.nodes.fwNew.text,
       'New version 4.10.0 available');
 
 group('GitHub недоступен, страница обновления');
