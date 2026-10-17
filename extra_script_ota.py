@@ -89,3 +89,20 @@ def check_ota_headroom(target, source, env):
 # .bin ещё не существует в графе SCons, и AddPostAction привязывается не к тому
 # узлу: образ создаётся, но проверка размера молча не запускается.
 env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", check_ota_headroom)
+
+
+# Фреймворк добавляет в ссылку `-u _printf_float -u _scanf_float`: они тянут
+# printf/scanf с плавающей точкой, ~6,9 КБ флеша. У нас они не нужны: printf-
+# семейство печатает только %u и %x, String(float) идёт через dtostrf, JSON
+# пишет числа сам. build_unflags здесь не годится: "-u" и его аргумент --
+# отдельные элементы, и он снимает все "-u", оставляя аргументы сиротами.
+# Поэтому снимается ровно эта пара.
+_float_io = ("_printf_float", "_scanf_float")
+_link, _kept, _i = list(env["LINKFLAGS"]), [], 0
+while _i < len(_link):
+    if _link[_i] == "-u" and _i + 1 < len(_link) and _link[_i + 1] in _float_io:
+        _i += 2
+        continue
+    _kept.append(_link[_i])
+    _i += 1
+env.Replace(LINKFLAGS=_kept)
