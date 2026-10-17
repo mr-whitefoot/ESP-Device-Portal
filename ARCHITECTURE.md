@@ -16,7 +16,8 @@ MQTT, NTP, OTA и хранение настроек общие; работа с 
   периферийные ожидания нельзя выполнять синхронно;
 - прошивка содержит ровно одно конечное устройство, выбранное при сборке.
 
-Принятые решения подробно зафиксированы в [журнале ADR](docs/adr/README.md).
+Принятые решения подробно зафиксированы в [журнале ADR](docs/adr/README.md), а
+значения слов проекта — в [GLOSSARY.md](GLOSSARY.md).
 
 ## Выбор прошивки
 
@@ -30,6 +31,9 @@ MQTT, NTP, OTA и хранение настроек общие; работа с 
 | `sonoff_basic_relay` | `[sonoff_basic]` | `DEVICE_RELAY` | `RELAY_PIN=12`, `BUTTON_PIN=0`, `STATUS_LED_PIN=13` |
 | `esp01_ds18b20` | `[esp01]` | `DEVICE_DS18B20` | `ONE_WIRE_PIN=2` |
 | `d1_mini_ds18b20` | `[d1_mini]` | `DEVICE_DS18B20` | `ONE_WIRE_PIN=D2` (GPIO4) |
+
+Седьмое окружение, `esp01_relay_metrics`, — диагностическое: реле для ESP-01 с
+метриками `loop()`. В релиз оно не входит, но собирается в CI.
 
 Окружение PlatformIO задаёт `DEVICE_RELAY`, `DEVICE_RELAY_BANK` или
 `DEVICE_DS18B20`.
