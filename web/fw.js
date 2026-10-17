@@ -40,7 +40,20 @@
   // остальных страниц, и молчать ей уместнее.
   function say(text, news) {
     if (statusLine) statusLine.textContent = text;
-    if (news && hint) hint.textContent = text;
+    if (news && hint) {
+      // Строка выглядит как остальные на главной (inliner > label) и ведёт на
+      // страницу обновления. Размер шрифта и выравнивание даёт CSS портала.
+      var link = document.createElement('a');
+      link.href = '/ota_update';
+      link.textContent = text;
+      link.style.color = 'inherit';
+      var label = document.createElement('label');
+      label.appendChild(link);
+      hint.textContent = '';
+      hint.className = 'inliner';
+      hint.style.width = '100%';
+      hint.appendChild(label);
+    }
   }
 
   function fetch(url, ok, bad, asBlob) {
