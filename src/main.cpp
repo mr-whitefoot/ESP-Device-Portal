@@ -10,6 +10,7 @@
 #include <core_keys.h>
 #include <core_contract.h>
 #include <restart_request.h>
+#include <decimal_parse.h>
 
 
 //#define DEBUG_DB
@@ -119,3 +120,30 @@ void loop(){
   restartTick();
   LOOP_METRICS_END();
 }
+
+
+// Свои atof и заглушки регистрации .eh_frame: срезают с образа ~14 КБ.
+// Ядро прошивки и GyverPortal при этом не меняются, подмена идёт на этапе
+// линковки: символ из проекта выигрывает у того, что лежит в libc/libgcc.
+
+// atof из libc тянет strtod вместе с mprec и gethex -- около 9,5 КБ ради
+// разбора экспонент, hex, inf и nan. Вызывают её String::toFloat (разбор
+// форм GyverPortal), toFloat из StringUtils и settings getFloat; во всех трёх
+// приходит обычная запись вида "-12.5". Грамматика: пробелы/табуляции,
+// необязательный знак, цифры, не более одной точки, цифры; на первом другом
+// символе разбор останавливается и возвращается то, что уже набрано ("1e3"
+// даёт 1). Сама логика в lib/decimal_parse, там же тесты на хосте.
+// Если что-то начнёт звать strtod напрямую, экономия молча пропадёт --
+// функционально ничего не сломается.
+extern "C" double atof(const char* s) { return parseDecimal(s); }
+
+// Исключения выключены (платформа собирает C++ с -fno-exceptions и линкует
+// libstdc++ без раскрутки), а ядро всё равно регистрирует .eh_frame на старте.
+// Эта регистрация тянет за собой unwind-dw2-fde из libgcc (~4,3 КБ) и нужна
+// только раскрутке исключений. Если что-то всё же бросит исключение, будет
+// то же, что и раньше: std::terminate -> abort -> перезагрузка с дампом;
+// раскрутка по таблицам в этом образе не работала и до заглушек.
+// Привязано к закреплённой версии платформы (ADR 0017): после её обновления
+// проверить, что ядро по-прежнему зовёт __register_frame_info только так.
+extern "C" void __register_frame_info(const void*, void*) {}
+extern "C" void* __deregister_frame_info(const void*) { return nullptr; }
