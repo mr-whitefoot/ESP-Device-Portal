@@ -125,19 +125,19 @@ state и availability и отдельными command/discovery-топиками
 ## Интерфейс web портала
 
 Главный экран<br>
-<img width="430" alt="image" src="https://github.com/mr-whitefoot/ESP-Device-Portal/assets/16363451/e40898e2-9f7a-4e93-8c04-41359ba0cad9">
+<img width="430" alt="main" src="docs/img/main.png">
 
 Поддержка таймеров<br>
-<img width="389" alt="main" src="https://user-images.githubusercontent.com/16363451/254378974-68468eab-a7b1-488c-91c0-90d5e21f072c.png">
+<img width="430" alt="timers" src="docs/img/timers.png">
 
 Выбор настроек<br>
-<img width="401" alt="image" src="https://github.com/mr-whitefoot/ESP-Device-Portal/assets/16363451/f3f8e971-b77e-4998-bc1a-49f401978e52">
+<img width="430" alt="config" src="docs/img/config.png">
 
 Настройки реле<br>
-<img width="389" alt="image" src="https://github.com/mr-whitefoot/ESP-Device-Portal/assets/16363451/b9f3134a-b1c5-464a-b94d-77f0ce899cd9">
+<img width="430" alt="preferences" src="docs/img/preferences.png">
 
 Обновление прошивки по Wi-Fi<br>
-<img src="https://user-images.githubusercontent.com/16363451/197058992-d8bc1296-aa61-4ff9-ba36-1ad8a007244e.png" width="400">
+<img width="430" alt="ota" src="docs/img/ota.png">
 
 
 ## Первоначальная настройка
