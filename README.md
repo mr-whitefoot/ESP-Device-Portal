@@ -220,6 +220,21 @@ state и availability и отдельными command/discovery-топиками
 [ADR 0013](docs/adr/0013-own-firmware-upload-handler.md) и
 [ADR 0015](docs/adr/0015-release-history-on-update-page.md).
 
+### Всем парком с компьютера
+
+`tools/fleet_update.py` делает то же, что кнопка `Install`, но с компьютера,
+у которого есть HTTPS: берёт список устройств из `tools/fleet.ini`, читает
+версию и образ с главной страницы каждого, сверяет их с последним релизом из
+манифеста и отправляет `.bin.gz` с теми же проверками места и md5. Без
+`--execute` печатает только план; датчики DS18B20 обновляются лишь с
+`--allow-sensors`.
+
+```
+python3 tools/fleet_update.py                          # план для всех
+python3 tools/fleet_update.py --device имя --execute   # обновить одно
+python3 tools/fleet_update.py --self-test              # проверка логики
+```
+
 ### Файлом через портал
 
 Путь для отката, непубликованных сборок и случая, когда у браузера нет доступа
