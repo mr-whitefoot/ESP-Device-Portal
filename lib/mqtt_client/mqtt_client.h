@@ -42,6 +42,7 @@ class CoreMqttClient {
 
   void setMqttServer(const char* server, const char* username,
                      const char* password, uint16_t port) {
+    _hasServer = (server && *server);
     _client.setServer(server, port);
     _client.setCredentials(username, password);
   }
@@ -109,6 +110,13 @@ class CoreMqttClient {
   // завершение приходит callback-ом. Пользовательские callback-и исполняются
   // отсюда, в обычном Arduino loop(), а не из обработчика TCP.
   void loop() {
+    // Брокер не задан -- подключаться некуда, и ходить в цикл незачем: без
+    // адреса MqttReconnect всё равно заводит попытку раз в 15 секунд, а через
+    // MQTT_CONNECT_TIMEOUT_MS отменяет её _client.disconnect(true) -- обрывом
+    // асинхронной TCP-попытки до callback. Ровно эта пара вызовов стоила
+    // прикрепления версий ESPAsyncTCP и AsyncMqttClient (platformio.ini).
+    if (!_hasServer) return;
+
     // mqttClearRetained() и restart() исторически зовут loop() из callback-а
     // подключения. Повторно диспетчеризовать события нельзя. Асинхронный
     // транспорт отправляет очередь независимо от этого метода, а ранний
@@ -258,6 +266,7 @@ class CoreMqttClient {
   bool _connectedPending = false;
   bool _disconnectedPending = false;
   bool _disconnectAfterQueuePending = false;
+  bool _hasServer = false;
   bool _insideLoop = false;
   AsyncMqttClientDisconnectReason _disconnectReason =
       AsyncMqttClientDisconnectReason::TCP_DISCONNECTED;

@@ -30,6 +30,17 @@ String portalName;
 // ни спрашивать занятость, ни перезапускать.
 bool portalReady = false;
 
+// Поднялся ли портал на самом деле. GyverPortal глотает результат server.begin()
+// и dnsServer.start() (portal.h:88,95), поэтому неудачный bind выглядит как
+// живая точка доступа, на которой молча не отвечает HTTP -- картина, которую
+// по логу нельзя было отличить от подвисшего loop(). captive защёлкивается
+// внутри start() и только при режиме ровно WIFI_AP, поэтому он здесь же.
+inline void logPortal(const __FlashStringHelper* where) {
+  LOG_I(web, String(F("portal ")) + where +
+             F(" listen=") + (portal.server.getServer().status() ? "on" : "off") +
+             F(" captive=") + (WiFi.getMode() == WIFI_AP ? "on" : "off"));
+}
+
 inline String ssid() { return settings::getStringValue(keys::wifi::ssid); }
 
 // Есть ли SSID -- без аллокации. inputs() зовётся на каждом проходе loop(),
@@ -93,7 +104,10 @@ inline void openAp() {
   // только вместе, а в кольцевом буфере портала занимали вдвое больше места.
   LOG_I(wifi, String(F("ap up ip=")) + WiFi.softAPIP().toString() +
               F(" name=") + apName);
-  if (portalReady) portal.start(portalName.c_str());
+  if (portalReady) {
+    portal.start(portalName.c_str());
+    logPortal(F("restarted"));
+  }
 }
 
 inline void stopAttempt() {
@@ -120,6 +134,7 @@ inline void closeAp() {
   if (portalReady) {
     portal.stop();
     portal.start(portalName.c_str());
+    logPortal(F("restarted"));
   }
 }
 
