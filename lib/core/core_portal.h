@@ -568,8 +568,9 @@ void portalCheckForm(){
         // тут не спасает, значений два.
         LOG_I(web, String(F("renamed from=\"")) + prevName +
                    F("\" to=\"") + deviceName + "\"");
-        // Незаконченная уборка уже держит имя, под которым сущность
-        // опубликована. Промежуточное имя до брокера не доходило.
+        // Незаконченная уборка доделывается сейчас, иначе текущее имя
+        // некому будет убрать; без брокера она так и держит своё.
+        mqttFlushPendingCleanup();
         if (!settings::getStringValue(keys::mqtt::prevName).length())
           settings::setString(keys::mqtt::prevName, prevName.c_str());
       }
@@ -646,9 +647,11 @@ void portalCheckForm(){
       // топики можно только после перезагрузки, разбор в mqttClearPreviousName().
       String topicPrefix = portal.getString("topicPrefix");
       String prevPrefix = settings::getStringValue(keys::mqtt::topicPrefix);
-      if (topicPrefix != prevPrefix &&
-          !settings::getStringValue(keys::mqtt::prevPrefix).length())
-        settings::setString(keys::mqtt::prevPrefix, prevPrefix.c_str());
+      if (topicPrefix != prevPrefix) {
+        mqttFlushPendingCleanup();
+        if (!settings::getStringValue(keys::mqtt::prevPrefix).length())
+          settings::setString(keys::mqtt::prevPrefix, prevPrefix.c_str());
+      }
       settings::setString(keys::mqtt::topicPrefix, topicPrefix.c_str());
 
       LOG_I(web, String(F("mqtt saved broker=")) +

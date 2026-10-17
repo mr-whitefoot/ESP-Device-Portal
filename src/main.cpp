@@ -56,6 +56,7 @@ void SendDiscoveryMessage();
 void SendAvailableMessage(const String &mode );
 void mqttPublish();
 void mqttClearRetained();
+void mqttFlushPendingCleanup();
 void factoryReset();
 void mqttStart();
 void onConnectionEstablished();
