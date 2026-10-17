@@ -50,4 +50,4 @@ ESP8285, образ во флеше совпал с файлом побайтн�
 
 Источники: комментарий у `[esp01]` и `[sonoff_basic]` в `platformio.ini`;
 `HANDOFF.md` (инцидент DS18B20); коммиты `e7ca636` и `7a32fdd`;
-[CHANGELOG](../../CHANGELOG.md) и [разбор версии 4.4.0](../history.md).
+[CHANGELOG](../../CHANGELOG.md), секция 4.4.0.

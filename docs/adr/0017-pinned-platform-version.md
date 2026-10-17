@@ -28,5 +28,5 @@
 на ESP8285 ([ADR 0016](0016-esp8285-flash-mode-dout.md)).
 
 Источники: комментарий у `platform` в `platformio.ini`; коммит `ca6fb17`;
-[разбор версии 4.3.1](../history.md); `HANDOFF.md` (переход на платформу 4.2.1,
+[CHANGELOG](../../CHANGELOG.md), секция 4.3.1; `HANDOFF.md` (переход на платформу 4.2.1,
 Arduino core 3.0.2 → 3.1.2).
