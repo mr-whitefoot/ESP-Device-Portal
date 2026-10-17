@@ -76,7 +76,11 @@ void facts(){
   // onerror -- единственная новость, которую страница может сообщить сама:
   // без интернета скрипта нет, и строка состояния иначе навсегда осталась бы
   // на "Checking...".
-  GP.SEND(F("}</script><script src='" FW_BASE "fw.js' onerror=\""
+  //
+  // async -- потому что в точке доступа интернета нет, а синхронный тег держит
+  // разбор страницы до таймаута браузера: главная висела, не дорисовав всё,
+  // что ниже строки версии.
+  GP.SEND(F("}</script><script async src='" FW_BASE "fw.js' onerror=\""
             "var e=document.getElementById('fwStatus');"
             "if(e)e.textContent='Offline'\"></script>"));
 }
