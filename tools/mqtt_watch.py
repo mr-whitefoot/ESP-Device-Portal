@@ -35,17 +35,15 @@ import time
 
 CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "broker.ini")
 
-TOPIC = sys.argv[1] if len(sys.argv) > 1 else "homeassistant/#"
-SECONDS = float(sys.argv[2]) if len(sys.argv) > 2 else 15.0
 CLIENT_ID = "mqtt-watch-%d" % (os.getpid() % 100000)
 
 
-def read_config():
-    if not os.path.exists(CONFIG):
+def read_config(path=CONFIG):
+    if not os.path.exists(path):
         sys.exit("Нет %s -- скопируйте broker.ini.example и впишите свой брокер"
-                 % CONFIG)
+                 % path)
     parser = configparser.ConfigParser()
-    parser.read(CONFIG)
+    parser.read(path)
     b = parser["broker"]
     return b.get("host"), b.getint("port", fallback=1883), \
         b.get("username", ""), b.get("password", "")
@@ -102,6 +100,10 @@ def read_len(sock):
 
 
 def main():
+    # Разбор аргументов здесь, а не на уровне модуля: tools/hw_test.py
+    # импортирует низкоуровневые функции этого файла.
+    TOPIC = sys.argv[1] if len(sys.argv) > 1 else "homeassistant/#"
+    SECONDS = float(sys.argv[2]) if len(sys.argv) > 2 else 15.0
     host, port, user, password = read_config()
     sock = connect(host, port, user, password)
     subscribe(sock, TOPIC)
@@ -136,4 +138,5 @@ def main():
     sock.close()
 
 
-main()
+if __name__ == "__main__":
+    main()
